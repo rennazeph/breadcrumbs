@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>URL Breadcrumbs </title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; max-width: 900px; margin: 0 auto; }
+    input { width: 100%; padding: 10px; font-size: 14px; }
+
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+    button { padding: 8px 12px; font-size: 14px; cursor: pointer; }
+
+    ul { margin-top: 12px; }
+    li { margin: 6px 0; }
+    .error { color: #b00020; margin-top: 10px; }
+
+    pre {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f6f6f6;
+      border-radius: 10px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .muted { opacity: 0.75; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <input id="urlInput" value="https://site.com/a/b?x=1&y=2" />
+
+  <div class="row">
+    <button id="copyBtn" type="button">Copy labeled output</button>
+    <span id="copyStatus" class="muted"></span>
+  </div>
+
+  <div id="err" class="error" aria-live="polite"></div>
+
+  <!-- Clickable links -->
+  <ul id="linksOut"></ul>
+
+  <!-- Labeled text output -->
+  <pre id="textOut"></pre>
+
+  <script>
+    function normalizeToAbsoluteUrl(raw) {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+
+      // If user didn't include a scheme, assume https://
+      const hasScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed);
+      return hasScheme ? trimmed : "https://" + trimmed;
+    }
+
+    function uniqInOrder(items) {
+      const seen = new Set();
+      const out = [];
+      for (const it of items) {
+        if (!seen.has(it)) {
+          seen.add(it);
+          out.push(it);
+        }
+      }
+      return out;
+    }
+
+    /**
+     * Returns:
+     *  - urls:  ["https://site.com/a", "https://site.com/a/b", "https://site.com/a/b?x=1", ...]
+     *  - labeledRows: [{label:"a", url:"https://site.com/a"}, ...]
+     */
+    function buildBreadcrumbs(raw) {
+      const absolute = normalizeToAbsoluteUrl(raw);
+      if (!absolute) return { urls: [], labeledRows: [] };
+
+      const u = new URL(absolute);
+      const origin = u.origin;
+      const segments = u.pathname.split("/").filter(Boolean);
+
+      const labeledRows = [];
+      const urls = [];
+
+      // (A) Path crumbs: label is the new segment, url is cumulative path
+      let pathAcc = "";
+      for (const seg of segments) {
+        pathAcc += "/" + seg;
+        const url = origin + pathAcc;
+
+        labeledRows.push({ label: seg, url });
+        urls.push(url);
+      }
+
+      // (B) Query crumbs: label is cumulative query string, url is basePath + ?query
+      const params = Array.from(u.searchParams.entries());
+      if (params.length > 0) {
+        const basePath = origin + (segments.length ? "/" + segments.join("/") : "/");
+        const qp = new URLSearchParams();
+
+        for (const [k, v] of params) {
+          qp.append(k, v);
+          const qstr = qp.toString();
+          const url = basePath + "?" + qstr;
+
+          labeledRows.push({ label: qstr, url });
+          urls.push(url);
+        }
+      }
+
+      // (C) Optional: hash as final crumb.
+       //  if (u.hash) {
+         //  labeledRows.push({ label: u.hash, url: u.href });
+         //  urls.push(u.href);
+      //   }
+
+      return {
+        urls: uniqInOrder(urls),
+        labeledRows
+      };
+    }
+
+    function renderLinks(urls) {
+      const out = document.getElementById("linksOut");
+      out.innerHTML = "";
+
+      for (const href of urls) {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = href;
+        a.textContent = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        li.appendChild(a);
+        out.appendChild(li);
+      }
+    }
+
+    function renderLabeledText(rows) {
+      const out = document.getElementById("textOut");
+      const lines = ["These are all the breadcrumbs:"];
+      for (const r of rows) lines.push(`[${r.label}]${r.url}`);
+      out.textContent = lines.join("\n");
+    }
+
+    async function copyLabeledText() {
+      const text = document.getElementById("textOut").textContent || "";
+      const status = document.getElementById("copyStatus");
+
+      try {
+        await navigator.clipboard.writeText(text);
+        status.textContent = "Copied!";
+        setTimeout(() => (status.textContent = ""), 1200);
+      } catch {
+        // Fallback for older/locked-down contexts:
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          status.textContent = "Copied!";
+          setTimeout(() => (status.textContent = ""), 1200);
+        } catch {
+          status.textContent = "Copy failed (browser blocked clipboard).";
+          setTimeout(() => (status.textContent = ""), 2000);
+        }
+      }
+    }
+
+    const input = document.getElementById("urlInput");
+    const err = document.getElementById("err");
+    const copyBtn = document.getElementById("copyBtn");
+
+    function update() {
+      err.textContent = "";
+      document.getElementById("copyStatus").textContent = "";
+
+      try {
+        const { urls, labeledRows } = buildBreadcrumbs(input.value);
+        renderLinks(urls);            // clickable list (as before)
+        renderLabeledText(labeledRows); // labeled block for copying
+      } catch {
+        renderLinks([]);
+        document.getElementById("textOut").textContent = "";
+        err.textContent = "Could not parse that as a URL. Try adding a domain or scheme (https://...).";
+      }
+    }
+
+    input.addEventListener("input", update);
+    copyBtn.addEventListener("click", copyLabeledText);
+
+    update();
+  </script>
+</body>
+</html>
