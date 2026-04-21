@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review and Recap Tabs</title>
+  <style>
+    :root {
+      /* Theme tokens */
+      --color-bg-page: #9a9a9a;
+      --color-surface-primary: #a3a3a3;
+      --color-surface-secondary: #9f9f9f;
+      --color-tab-primary: #005f58;
+      --color-tab-secondary: #181619;
+      --color-accent: #00a8c8;
+      --color-card-review: #19ff00;
+      --color-card-review-active: #6dff5f;
+      --color-card-recap: #8fcea8;
+      --color-card-recap-active: #a6dcbc;
+      --color-text-main: #2f2f2f;
+      --color-text-soft: #404040;
+      --color-text-muted: rgba(44, 44, 44, 0.42);
+      --color-line-soft: rgba(255, 255, 255, 0.38);
+      --color-line-dim: rgba(255, 255, 255, 0.16);
+      --color-white: #f7f7f7;
+      --shadow-panel: 0 12px 30px rgba(0, 0, 0, 0.16);
+
+      /* Sizing */
+      --shell-width: min(1380px, calc(100vw - 18px));
+      --shell-height: min(760px, calc(100vh - 18px));
+      --chrome-gap: 10px;
+      --card-gap: 6px;
+
+      /* Motion */
+      --transition-fast: 160ms ease;
+      --transition-medium: 320ms ease;
+      --transition-slow: 760ms cubic-bezier(.19, .72, .14, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #262626;
+      font-family: "Courier New", Courier, monospace;
+      color: var(--color-text-main);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 6px;
+    }
+
+    .app-shell {
+      position: relative;
+      width: var(--shell-width);
+      height: var(--shell-height);
+      background: var(--color-bg-page);
+      border: 6px solid var(--color-white);
+      box-shadow: var(--shadow-panel);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 122px 58px 1fr 60px;
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, transparent 29.5%, rgba(255, 255, 255, 0.32) 30%, transparent 30.15%),
+        linear-gradient(to right, transparent 58.7%, rgba(255, 255, 255, 0.32) 59%, transparent 59.15%),
+        linear-gradient(to right, transparent 87.7%, rgba(255, 255, 255, 0.32) 88%, transparent 88.15%),
+        linear-gradient(to bottom, transparent 56%, rgba(255, 255, 255, 0.18) 56.1%, transparent 56.2%);
+      mix-blend-mode: soft-light;
+      z-index: 1;
+    }
+
+    .chrome-region {
+      position: relative;
+      z-index: 2;
+      margin: 10px 12px 0;
+    }
+
+    .title-region {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+
+    .chrome-panel {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .chrome-panel.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .surface-panel {
+      background: var(--color-surface-primary);
+      height: 100%;
+      border-bottom: 2px solid var(--color-line-soft);
+    }
+
+    .surface-panel.title-surface {
+      background: var(--color-surface-secondary);
+      border-top: 2px solid var(--color-line-soft);
+      border-bottom: 2px solid var(--color-line-dim);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .header-panel.recap {
+      padding: 14px 14px 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+      column-gap: 16px;
+    }
+
+    .header-panel.review {
+      display: grid;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      align-content: center;
+      row-gap: 2px;
+      text-align: center;
+      padding: 10px 18px 8px;
+    }
+
+    .header-copy {
+      margin: 0;
+      font-weight: 700;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.14);
+      white-space: pre-line;
+      color: #333333;
+    }
+
+    .header-panel.recap .header-copy {
+      font-size: clamp(17px, 1.55vw, 30px);
+      line-height: 1.12;
+    }
+
+    .header-panel.recap .header-copy.right {
+      text-align: right;
+      align-self: end;
+      padding-top: 34px;
+    }
+
+    .header-copy.hero {
+      font-size: clamp(38px, 3.2vw, 64px);
+      line-height: 0.94;
+      letter-spacing: 0.7px;
+    }
+
+    .header-copy.subhero {
+      font-size: clamp(24px, 2vw, 38px);
+      line-height: 1;
+    }
+
+    .header-copy.note {
+      margin-top: 12px;
+      font-size: clamp(10px, 0.9vw, 16px);
+      line-height: 1.08;
+      color: #4e4e4e;
+    }
+
+    .title-panel {
+      cursor: pointer;
+    }
+
+    .title-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 0 14px;
+    }
+
+    .title-front,
+    .title-text {
+      grid-area: 1 / 1;
+      text-align: center;
+      color: #373737;
+      pointer-events: none;
+    }
+
+    .title-front {
+      font-size: clamp(24px, 2vw, 40px);
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+    }
+
+    .title-front.icon {
+      font-size: clamp(28px, 2.4vw, 48px);
+    }
+
+    .title-text {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: clamp(34px, 2.85vw, 58px);
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      white-space: nowrap;
+      opacity: 0;
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+    }
+
+    .recap-title .title-text.old {
+      transform: translate(-50%, -50%) scale(0.985);
+    }
+
+    .recap-title .title-text.new {
+      transform: translate(-50%, calc(-50% - 130%));
+    }
+
+    .recap-title .title-text.old::after {
+      content: "";
+      position: absolute;
+      left: 1.5%;
+      right: 1.5%;
+      top: 50%;
+      height: 4px;
+      background: rgba(45, 45, 45, 0.88);
+      transform: scaleX(0);
+      transform-origin: left center;
+      opacity: 0;
+    }
+
+    .recap-title.is-open .title-front,
+    .recap-title.is-swapping .title-front,
+    .recap-title.is-swapped .title-front,
+    .review-title.is-open .title-front {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    .recap-title.is-open .title-text.old {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+
+    .recap-title.is-swapping .title-text.old::after {
+      animation: strikeLine 320ms ease forwards;
+    }
+
+    .recap-title.is-swapping .title-text.old {
+      animation: titleFallOut 720ms cubic-bezier(.19, .72, .14, 1) 220ms forwards;
+    }
+
+    .recap-title.is-swapping .title-text.new {
+      animation: titleDropIn 760ms cubic-bezier(.19, .72, .14, 1) 220ms forwards;
+    }
+
+    .recap-title.is-swapped .title-text.old {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% + 118px)) rotate(4deg);
+    }
+
+    .recap-title.is-swapped .title-text.new {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+
+    .review-title .title-text.static {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.985);
+    }
+
+    .review-title.is-open .title-text.static {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+
+    .main-view {
+      position: relative;
+      z-index: 2;
+      padding: 0 10px 8px;
+      overflow: hidden;
+    }
+
+    .tab-panel {
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .content-layout {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      align-content: stretch;
+    }
+
+    .recap-layout {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 210px 1fr;
+      gap: var(--chrome-gap);
+      padding-top: 2px;
+    }
+
+    .review-layout {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--card-gap);
+    }
+
+    .recap-info-card.large {
+      grid-column: 1 / -1;
+    }
+
+    .content-card {
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      min-width: 0;
+      transition:
+        filter var(--transition-fast),
+        transform var(--transition-fast),
+        background var(--transition-medium);
+    }
+
+    .content-card:hover {
+      filter: brightness(1.03);
+    }
+
+    .content-card:active {
+      transform: translateY(1px);
+    }
+
+    .content-card.review-card {
+      background: var(--color-card-review);
+      padding: 12px 10px 10px;
+      border: 0;
+    }
+
+    .content-card.review-card.expanded {
+      background: var(--color-card-review-active);
+    }
+
+    .content-card.recap-card {
+      background: var(--color-card-recap);
+      border: 5px solid rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      padding: 12px 14px;
+    }
+
+    .content-card.recap-card.revealed {
+      background: var(--color-card-recap-active);
+    }
+
+    .card-draw {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08));
+      transform: translateX(-102%);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .review-card.expanded .card-draw,
+    .recap-card.revealed .card-draw {
+      animation: drawCardIn 560ms cubic-bezier(.2, .75, .15, 1) forwards;
+    }
+
+    .card-index {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-muted);
+      z-index: 2;
+    }
+
+    .card-shell {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+    }
+
+    .review-card .card-shell {
+      display: block;
+    }
+
+    .review-card-label,
+    .review-card-title,
+    .review-card-body,
+    .recap-card-title,
+    .recap-card-body {
+      margin: 0;
+    }
+
+    .review-card-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 10px 14px;
+      font-size: clamp(16px, 1.42vw, 28px);
+      line-height: 1.08;
+      font-weight: 700;
+      color: #333333;
+      text-align: center;
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+    }
+
+    .review-card-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 34px 8px 8px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(8px);
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease,
+        visibility 0s linear 180ms;
+      text-align: left;
+      pointer-events: none;
+    }
+
+    .review-card-title {
+      font-size: clamp(12px, 1.08vw, 20px);
+      line-height: 1.05;
+      font-weight: 700;
+      color: #303030;
+      flex: 0 0 auto;
+    }
+
+    .review-card-body {
+      font-size: clamp(9px, 0.84vw, 14px);
+      line-height: 1.1;
+      font-weight: 700;
+      color: var(--color-text-soft);
+      overflow: auto;
+      min-height: 0;
+      flex: 1 1 auto;
+      padding-right: 3px;
+      overflow-wrap: anywhere;
+      hyphens: auto;
+      scrollbar-width: thin;
+    }
+
+    .review-card.expanded .review-card-label {
+      opacity: 0;
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+
+    .review-card.expanded .review-card-content {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      transition-delay: 100ms, 100ms, 0s;
+      pointer-events: auto;
+    }
+
+    .recap-card-inner {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 10px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition:
+        opacity 360ms ease,
+        transform 360ms ease;
+    }
+
+    .recap-card.revealed .recap-card-inner {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .recap-card-title {
+      font-size: clamp(18px, 1.55vw, 26px);
+      line-height: 1.08;
+      font-weight: 700;
+      color: #2f2f2f;
+    }
+
+    .recap-card-body {
+      font-size: clamp(15px, 1.22vw, 20px);
+      line-height: 1.14;
+      font-weight: 700;
+      color: #454545;
+    }
+
+    .recap-card-hint {
+      position: absolute;
+      left: 14px;
+      bottom: 10px;
+      font-size: 13px;
+      color: rgba(30, 30, 30, 0.58);
+      transition: opacity 180ms ease;
+    }
+
+    .recap-card.revealed .recap-card-hint {
+      opacity: 0;
+    }
+
+    .tab-switcher {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1.28fr 1fr;
+      overflow: hidden;
+      border-top: 2px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .tab-button {
+      border: 0;
+      font-family: inherit;
+      font-size: clamp(30px, 2.3vw, 44px);
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      transition: filter var(--transition-fast), transform var(--transition-fast);
+      position: relative;
+    }
+
+    .tab-button:hover {
+      filter: brightness(1.08);
+    }
+
+    .tab-button:active {
+      transform: translateY(1px);
+    }
+
+    .tab-button.recap {
+      background: var(--color-tab-primary);
+      color: rgba(20, 40, 43, 0.82);
+    }
+
+    .tab-button.review {
+      background: var(--color-tab-secondary);
+      color: var(--color-accent);
+    }
+
+    .tab-button.active::before {
+      content: "ACTIVE";
+      position: absolute;
+      top: 6px;
+      right: 12px;
+      font-size: 11px;
+      letter-spacing: 1.1px;
+      color: rgba(255, 255, 255, 0.48);
+    }
+
+    .micro-note {
+      position: absolute;
+      right: 14px;
+      bottom: 66px;
+      z-index: 3;
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(34, 34, 34, 0.64);
+      background: rgba(255, 255, 255, 0.09);
+      padding: 6px 8px;
+    }
+
+    @keyframes strikeLine {
+      0% { transform: scaleX(0); opacity: 0; }
+      15% { opacity: 1; }
+      100% { transform: scaleX(1); opacity: 1; }
+    }
+
+    @keyframes titleFallOut {
+      0% { opacity: 1; transform: translate(-50%, -50%) rotate(0deg); }
+      50% { opacity: 1; transform: translate(-50%, calc(-50% + 16px)) rotate(-1deg); }
+      100% { opacity: 0; transform: translate(-50%, calc(-50% + 118px)) rotate(4deg); }
+    }
+
+    @keyframes titleDropIn {
+      0% { opacity: 0; transform: translate(-50%, calc(-50% - 130%)) rotate(-1.3deg); }
+      55% { opacity: 1; }
+      100% { opacity: 1; transform: translate(-50%, -50%) rotate(0deg); }
+    }
+
+    @keyframes drawCardIn {
+      0% { transform: translateX(-102%); }
+      70% { transform: translateX(0%); }
+      100% { transform: translateX(102%); }
+    }
+
+    @media (max-width: 1100px) {
+      .review-card-body {
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .app-shell {
+        grid-template-rows: 136px 62px 1fr 70px;
+      }
+
+      .header-panel.recap {
+        grid-template-columns: 1fr;
+        row-gap: 8px;
+      }
+
+      .header-panel.recap .header-copy.right {
+        padding-top: 0;
+        text-align: left;
+      }
+
+      .review-layout,
+      .recap-layout {
+        grid-template-columns: 1fr;
+        overflow: auto;
+        padding-right: 2px;
+      }
+
+      .recap-layout {
+        grid-template-rows: repeat(3, minmax(120px, auto));
+      }
+
+      .recap-info-card.large {
+        grid-column: auto;
+      }
+
+      .title-front,
+      .title-text,
+      .review-title .title-text.static {
+        white-space: normal;
+      }
+
+      .micro-note {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell" aria-label="Guide presentation page">
+    <div class="grid-overlay" aria-hidden="true"></div>
+
+    <div class="chrome-region header-region">
+      <header class="chrome-panel surface-panel header-panel recap active" id="recapHeader">
+        <p class="header-copy">Work products are elements needed
+in the SDLC requirements, user stories, designs, code.</p>
+        <p class="header-copy right">Any work product that can be read and understood
+can be the subject of a review.</p>
+      </header>
+
+      <header class="chrome-panel surface-panel header-panel review" id="reviewHeader">
+        <p class="header-copy hero">The Magic Framework!</p>
+        <p class="header-copy subhero">Or at least its very basic existence!</p>
+        <p class="header-copy note">Informal reviews may not follow these rules, but in Inspection Reviews do!</p>
+      </header>
+    </div>
+
+    <div class="chrome-region title-region">
+      <section class="chrome-panel surface-panel title-surface title-panel recap recap-title active" id="recapTitleBar" aria-label="Recap title card" title="Click to open the recap flow">
+        <div class="title-stage">
+          <span class="title-front">recap</span>
+          <span class="title-text old">How to Keep the Money Happy.</span>
+          <span class="title-text new">3.2 Feedback and Review Process.</span>
+        </div>
+      </section>
+
+      <section class="chrome-panel surface-panel title-surface title-panel review review-title" id="reviewTitleBar" aria-label="Review title card" title="Click to open the review activity title">
+        <div class="title-stage">
+          <span class="title-front icon">🥁</span>
+          <span class="title-text static">3.2.2. Review Process Activities</span>
+        </div>
+      </section>
+    </div>
+
+    <section class="main-view">
+      <div class="tab-panel active" id="recapPanel" aria-hidden="false">
+        <div class="content-layout recap-layout">
+          <article class="content-card recap-card recap-info-card" data-recap-card-key="benefits">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">CARD 01</div>
+            <div class="card-shell recap-card-inner">
+              <h3 class="recap-card-title"></h3>
+              <p class="recap-card-body"></p>
+            </div>
+            <div class="recap-card-hint">Click to draw/reveal</div>
+          </article>
+
+          <article class="content-card recap-card recap-info-card" data-recap-card-key="feedback-value">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">CARD 02</div>
+            <div class="card-shell recap-card-inner">
+              <h3 class="recap-card-title"></h3>
+              <p class="recap-card-body"></p>
+            </div>
+            <div class="recap-card-hint">Click to draw/reveal</div>
+          </article>
+
+          <article class="content-card recap-card recap-info-card large" data-recap-card-key="framework-note">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">CARD 03</div>
+            <div class="card-shell recap-card-inner">
+              <h3 class="recap-card-title"></h3>
+              <p class="recap-card-body"></p>
+            </div>
+            <div class="recap-card-hint">Click to draw/reveal</div>
+          </article>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="reviewPanel" aria-hidden="true">
+        <div class="content-layout review-layout">
+          <article class="content-card review-card info-card" data-card-key="planning">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">STEP 01</div>
+            <div class="card-shell">
+              <p class="review-card-label"></p>
+              <div class="review-card-content">
+                <h3 class="review-card-title"></h3>
+                <p class="review-card-body"></p>
+              </div>
+            </div>
+          </article>
+
+          <article class="content-card review-card info-card" data-card-key="review-initiation">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">STEP 02</div>
+            <div class="card-shell">
+              <p class="review-card-label"></p>
+              <div class="review-card-content">
+                <h3 class="review-card-title"></h3>
+                <p class="review-card-body"></p>
+              </div>
+            </div>
+          </article>
+
+          <article class="content-card review-card info-card" data-card-key="individual-review">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">STEP 03</div>
+            <div class="card-shell">
+              <p class="review-card-label"></p>
+              <div class="review-card-content">
+                <h3 class="review-card-title"></h3>
+                <p class="review-card-body"></p>
+              </div>
+            </div>
+          </article>
+
+          <article class="content-card review-card info-card" data-card-key="communication-analysis">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">STEP 04</div>
+            <div class="card-shell">
+              <p class="review-card-label"></p>
+              <div class="review-card-content">
+                <h3 class="review-card-title"></h3>
+                <p class="review-card-body"></p>
+              </div>
+            </div>
+          </article>
+
+          <article class="content-card review-card info-card" data-card-key="fixing-reporting">
+            <div class="card-draw" aria-hidden="true"></div>
+            <div class="card-index">STEP 05</div>
+            <div class="card-shell">
+              <p class="review-card-label"></p>
+              <div class="review-card-content">
+                <h3 class="review-card-title"></h3>
+                <p class="review-card-body"></p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tab-switcher" aria-label="Bottom tab switcher">
+      <button class="tab-button recap active" id="recapButton" type="button">Recap Tab</button>
+      <button class="tab-button review" id="reviewButton" type="button">Review Tab</button>
+    </nav>
+
+    <div class="micro-note">Top title cards now begin closed. Recap opens from a label. Review opens from a drum.</div>
+  </main>
+
+  <script>
+    const reviewCardContent = {
+      planning: {
+        label: "Planning",
+        title: "Planning",
+        body: "During the planning phase, the scope of the review, which comprises the purpose, the work product to be reviewed, quality characteristics to be evaluated, areas to focus on, exit criteria, supporting information such as standards, effort and the timeframes for the review, shall be defined."
+      },
+      "review-initiation": {
+        label: "Review\\nInitiation",
+        title: "Review initiation",
+        body: "During review initiation, the goal is to make sure that everyone and everything involved is prepared to start the review. This includes making sure that every participant has access to the work product under review, understands their role and responsibilities and receives everything needed to perform the review."
+      },
+      "individual-review": {
+        label: "Individual\\nReview",
+        title: "Individual review",
+        body: "Every reviewer performs an individual review to assess the quality of the work product under review, and to identify anomalies, recommendations, and questions by applying one or more review techniques such as checklist-based reviewing or scenario-based reviewing. The ISO/IEC 20246 standard provides more depth on different review techniques. The reviewers log all their identified anomalies, recommendations, and questions."
+      },
+      "communication-analysis": {
+        label: "Communica-\\ntion\\nand analy-\\nsis",
+        title: "Communication and analysis",
+        body: "Since the anomalies identified during a review are not necessarily defects, all these anomalies need to be analyzed and discussed. For every anomaly, the decision should be made on its status, ownership and required actions. This is typically done in a review meeting, during which the participants also decide what the quality level of reviewed work product is and what follow-up actions are required. A follow-up review may be required to complete actions."
+      },
+      "fixing-reporting": {
+        label: "Fixing and\\nreporting!",
+        title: "Fixing and reporting",
+        body: "For every defect, a defect report should be created so that corrective actions can be followed-up. Once the exit criteria are reached, the work product can be accepted. The review results are reported."
+      }
+    };
+
+    const recapCardContent = {
+      benefits: {
+        title: "Benefits of Early and Frequent Stakeholder Feedback.",
+        body: "Little or deficient stakeholder involvement during the SDLC may result in the product diverging from the stakeholder's original or current vision. This can cost from reworks, missed deadlines or even project failure."
+      },
+      "feedback-value": {
+        title: "Value of Frequent Feedback.",
+        body: "A frequent stakeholder feedback in the cycle helps preventing any misunderstanding that may change requirements or previous implementations. A good communication improves the understanding of what everyone's building. But most importantly. Show value to stakeholders! And identify risks early."
+      },
+      "framework-note": {
+        title: "Why the Framework Matters.",
+        body: "Stakeholders, naturally, vary on how they would present this feedback, and so the ISO/IEC 20246 standard provides a basic framework of what activities constitute a good review. This may become more specific on determined areas at specific cycle times and needs."
+      }
+    };
+
+    const uiState = {
+      activeTab: "recap",
+      recapTitleStage: "closed",
+      recapTitleIsBusy: false,
+      reviewTitleIsOpen: false
+    };
+
+    const elements = {
+      recapHeader: document.getElementById("recapHeader"),
+      reviewHeader: document.getElementById("reviewHeader"),
+      recapTitleBar: document.getElementById("recapTitleBar"),
+      reviewTitleBar: document.getElementById("reviewTitleBar"),
+      recapPanel: document.getElementById("recapPanel"),
+      reviewPanel: document.getElementById("reviewPanel"),
+      recapButton: document.getElementById("recapButton"),
+      reviewButton: document.getElementById("reviewButton"),
+      reviewCards: Array.from(document.querySelectorAll(".review-card")),
+      recapCards: Array.from(document.querySelectorAll(".recap-card"))
+    };
+
+    function initializeInterface() {
+      populateRecapCards();
+      populateReviewCards();
+      bindEvents();
+      setActiveTab("recap", { resetPresentation: true });
+    }
+
+    function populateReviewCards() {
+      elements.reviewCards.forEach(function (cardElement) {
+        const cardData = reviewCardContent[cardElement.dataset.cardKey];
+        if (!cardData) return;
+
+        const labelElement = cardElement.querySelector(".review-card-label");
+        const titleElement = cardElement.querySelector(".review-card-title");
+        const bodyElement = cardElement.querySelector(".review-card-body");
+
+        if (labelElement) labelElement.innerHTML = cardData.label.replace(/\n/g, "<br>");
+        if (titleElement) titleElement.textContent = cardData.title;
+        if (bodyElement) bodyElement.textContent = cardData.body;
+      });
+    }
+
+    function populateRecapCards() {
+      elements.recapCards.forEach(function (cardElement) {
+        const cardData = recapCardContent[cardElement.dataset.recapCardKey];
+        if (!cardData) return;
+
+        const titleElement = cardElement.querySelector(".recap-card-title");
+        const bodyElement = cardElement.querySelector(".recap-card-body");
+
+        if (titleElement) titleElement.textContent = cardData.title;
+        if (bodyElement) bodyElement.textContent = cardData.body;
+      });
+    }
+
+    function bindEvents() {
+      elements.recapButton.addEventListener("click", function () {
+        setActiveTab("recap", { resetPresentation: true });
+      });
+
+      elements.reviewButton.addEventListener("click", function () {
+        setActiveTab("review", { resetPresentation: true });
+      });
+
+      elements.recapTitleBar.addEventListener("click", handleRecapTitleClick);
+      elements.reviewTitleBar.addEventListener("click", handleReviewTitleClick);
+
+      elements.reviewCards.forEach(function (cardElement) {
+        cardElement.addEventListener("click", function () {
+          if (uiState.activeTab !== "review") return;
+          cardElement.classList.toggle("expanded");
+          restartDrawAnimation(cardElement);
+        });
+      });
+
+      elements.recapCards.forEach(function (cardElement, index) {
+        cardElement.addEventListener("click", function () {
+          toggleRecapCard(cardElement, index);
+        });
+      });
+    }
+
+    function setActiveTab(tabName, options) {
+      const configuration = Object.assign({ resetPresentation: false }, options || {});
+      const showRecap = tabName === "recap";
+      const showReview = tabName === "review";
+
+      uiState.activeTab = tabName;
+
+      toggleActive(elements.recapHeader, showRecap);
+      toggleActive(elements.reviewHeader, showReview);
+      toggleActive(elements.recapTitleBar, showRecap);
+      toggleActive(elements.reviewTitleBar, showReview);
+      toggleActive(elements.recapPanel, showRecap);
+      toggleActive(elements.reviewPanel, showReview);
+      toggleActive(elements.recapButton, showRecap);
+      toggleActive(elements.reviewButton, showReview);
+
+      elements.recapPanel.setAttribute("aria-hidden", String(!showRecap));
+      elements.reviewPanel.setAttribute("aria-hidden", String(!showReview));
+
+      if (configuration.resetPresentation) {
+        resetPresentationState();
+      }
+    }
+
+    function toggleActive(element, isActive) {
+      element.classList.toggle("active", isActive);
+    }
+
+    function resetPresentationState() {
+      resetRecapTitleState();
+      resetReviewTitleState();
+      resetReviewCards();
+      resetRecapCards();
+    }
+
+    function resetRecapTitleState() {
+      uiState.recapTitleStage = "closed";
+      uiState.recapTitleIsBusy = false;
+      elements.recapTitleBar.classList.remove("is-open", "is-swapping", "is-swapped");
+    }
+
+    function resetReviewTitleState() {
+      uiState.reviewTitleIsOpen = false;
+      elements.reviewTitleBar.classList.remove("is-open");
+    }
+
+    function resetReviewCards() {
+      elements.reviewCards.forEach(function (cardElement) {
+        cardElement.classList.remove("expanded");
+      });
+    }
+
+    function resetRecapCards() {
+      elements.recapCards.forEach(function (cardElement) {
+        cardElement.classList.remove("revealed");
+        cardElement.style.transitionDelay = "0s";
+      });
+    }
+
+    function handleRecapTitleClick() {
+      if (uiState.activeTab !== "recap") return;
+      if (uiState.recapTitleIsBusy) return;
+
+      if (uiState.recapTitleStage === "closed") {
+        elements.recapTitleBar.classList.add("is-open");
+        uiState.recapTitleStage = "open";
+        return;
+      }
+
+      if (uiState.recapTitleStage === "open") {
+        runRecapTitleSwapAnimation();
+      }
+    }
+
+    function runRecapTitleSwapAnimation() {
+      uiState.recapTitleIsBusy = true;
+      uiState.recapTitleStage = "swapping";
+      elements.recapTitleBar.classList.remove("is-open", "is-swapped");
+      elements.recapTitleBar.classList.add("is-swapping");
+
+      window.setTimeout(function () {
+        elements.recapTitleBar.classList.remove("is-swapping");
+        elements.recapTitleBar.classList.add("is-swapped");
+        uiState.recapTitleStage = "swapped";
+        uiState.recapTitleIsBusy = false;
+      }, 1240);
+    }
+
+    function handleReviewTitleClick() {
+      if (uiState.activeTab !== "review") return;
+      if (uiState.reviewTitleIsOpen) return;
+
+      elements.reviewTitleBar.classList.add("is-open");
+      uiState.reviewTitleIsOpen = true;
+    }
+
+    function toggleRecapCard(cardElement, index) {
+      if (uiState.activeTab !== "recap") return;
+
+      const cardIsRevealed = cardElement.classList.contains("revealed");
+      if (cardIsRevealed) {
+        cardElement.classList.remove("revealed");
+        cardElement.style.transitionDelay = "0s";
+        return;
+      }
+
+      cardElement.classList.add("revealed");
+      cardElement.style.transitionDelay = index * 0.02 + "s";
+      restartDrawAnimation(cardElement);
+    }
+
+    function restartDrawAnimation(cardElement) {
+      const drawLayer = cardElement.querySelector(".card-draw");
+      if (!drawLayer) return;
+      drawLayer.style.animation = "none";
+      void drawLayer.offsetHeight;
+      drawLayer.style.animation = "";
+    }
+
+    initializeInterface();
+  </script>
+</body>
+</html>
