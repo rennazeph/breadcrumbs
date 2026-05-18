@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Backpack Alpha</title>
+  <link rel="stylesheet" href="./css/backpack.css" />
+</head>
+<body>
+  <div class="bp-app">
+    <header class="bp-header">
+      <div class="bp-titleline">
+        <strong>BACKPACK V1.0.0</strong>
+        <span id="bpHeaderQuote">"An inspiring quote section goes here, holding space between title and customizer buttons"</span>
+        <div class="bp-actions" aria-label="Backpack actions">
+          <button id="bpExportBtn" title="Export state" aria-label="Export state">⤴</button>
+          <button id="bpDarkBtn" type="button" title="Toggle app light/dark" aria-label="Toggle app light/dark">◐</button>
+          <button id="bpReadBtn" type="button" title="Toggle reading light/dark" aria-label="Toggle reading light/dark">◨</button>
+          <button id="bpDensityBtn" type="button" title="Toggle compact/readable density" aria-label="Toggle compact/readable density">▤</button>
+          <button id="bpImportBtn" title="Import state" aria-label="Import state">⤵</button>
+          <button id="bpAccessibleBtn" type="button" title="Accessible mode" aria-label="Accessible mode" aria-pressed="false">♿</button>
+          <input id="bpImportFile" class="bp-hidden" type="file" accept="application/json,.json" />
+        </div>
+      </div>
+      <div class="bp-header-row">
+        <nav id="bpTabs" class="bp-tabs" aria-label="Backpack sections"></nav>
+      </div>
+    </header>
+    <main id="bpWorkspace" class="bp-workspace"></main>
+  </div>
+
+  <div id="bpToasts" class="bp-toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="./js/backpack.js" defer></script>
+</body>
+</html>
