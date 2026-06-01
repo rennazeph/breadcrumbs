@@ -1,8 +1,8 @@
-# The Backpack 1.31.2 — Split Build
+# The Backpack 1.31.10 — Split Build
 
 The Backpack is a direct-open HTML/CSS/JS workspace for daily tracking, reference notes, code snippets, quick post-it notes, and reusable content templates.
 
-Version **1.31.2** updates the 1.30 baseline with a cleaner tab registry, a promoted-widget shelf, and an upload-first content workflow. Backpack is now expected to open from `index.html` without a local server.
+Version **1.31.10** is a CSS contract hotfix on top of the v1.31.9 cleanup. It keeps the visual result close to v1.31.8/v1.31.9 while restoring reader-dark mode, themed calendar days, and themed tab buttons.
 
 ## Run the split build
 
@@ -12,7 +12,7 @@ Open `index.html` directly in the browser.
 /backpack/index.html
 ```
 
-Promoted Event Gantt shelf controls were compacted and the duplicated inner Unpin control was removed. Content documents are loaded through upload controls inside the relevant tabs. The app no longer checks neighboring Markdown/HTML files with `fetch()`, so it does not need `python -m http.server` for normal use.
+Promoted Event Gantt shelf controls were compacted and the duplicated inner Unpin control was removed. Content documents are loaded through upload controls inside the relevant tabs. The app no longer checks neighboring Markdown/HTML files through runtime local-file requests, so it does not need `python -m http.server` for normal use.
 
 ## Folder map
 
@@ -45,7 +45,16 @@ Promoted Event Gantt shelf controls were compacted and the duplicated inner Unpi
 │  ├─ regression-checklist.md
 │  ├─ release-1.30.md
 │  ├─ release-1.31.md
-│  └─ release-1.31.2.md
+│  ├─ release-1.31.1.md
+│  ├─ release-1.31.2.md
+│  ├─ release-1.31.3.md
+│  ├─ release-1.31.4.md
+│  ├─ release-1.31.5.md
+│  ├─ release-1.31.6.md
+│  ├─ release-1.31.7.md
+│  ├─ release-1.31.8.md
+│  ├─ release-1.31.9.md
+│  └─ release-1.31.10.md
 └─ README.md
 ```
 
@@ -58,24 +67,28 @@ The `content/` folder remains useful as an authoring scaffold, but the live app 
 | Calendar | Start Day arrival flow, month view, events, repeat-this-month copies, Event Gantt, calendar tools | Stored in `appState.calendar`; full export and calendar-only export both support this data. Event Gantt can be pinned to the promoted shelf. |
 | Notes | Main Markdown import display | Upload Markdown; Markdown is escaped and cached in `appState.notes`. |
 | Code Blocks | Copy-ready command/template snippets with placeholders | Static snippet definitions in JS; uses placeholder values from Settings. |
-| Quick Notes | Fixed-grid post-it board | Stored in `appState.quickNotes`; supports board-only export/import. |
+| Quick Notes | Fixed-grid post-it board | Stored in `appState.quickNotes`; supports board-only export/import. Pasted links are captured into each note's saved `links` drawer. |
 | CSS Museum | Instructional component/template examples | HTML comments in examples are documentation. |
 | Template - Basic | Simple custom page template using Newton `F = ma` | Upload Markdown and trusted HTML, or load the bundled demo. |
 | Template - Medium | Three-column wiki-style Bees page | Upload a multi-file Markdown bundle from `content/wiki/`, plus optional page images and side-note Markdown. Uploaded images are stored as data URLs in state. |
 | Placeholders | Project paths, reusable values, header quote, path derivation | Stored in `appState.placeholders`; used by snippets, templates, Markdown, and Museum examples. |
 
+## CSS/theme maintenance contract
+
+The v1.31.10 CSS pass keeps old visual rules in place for safety, but adds a canonical final contract layer at the bottom of `css/backpack.css`. New work should prefer semantic variables such as `--bp-brand-primary`, `--bp-control-active-bg`, `--bp-reader-surface`, `--bp-link-text`, `--bp-calendar-day-bg`, and `--bp-z-menu` instead of hard-coded colours or legacy names like `--bp-gold`.
+
+Theme blocks should mostly define variables. Component selectors should only be added when the component needs real layout or state structure.
+
 ## Global controls
 
-Top-right controls are icon-only to preserve compact layout:
+The top-right header now separates data actions from display actions. Full-state import/export live behind the **Data** dropdown, while Theme and Display stay promoted as wider buttons.
 
-| Icon | Function |
+| Control | Function |
 |---|---|
-| `⤴` | Export full Backpack state. |
-| `⤵` | Import full Backpack state. |
-| `◐ / ☼` | App chrome dark/light theme. |
-| `◨ / ◩` | Reading-window theme, independent from app theme. |
-| `▤ / ▥` | Compact/readable density. |
-| `♿` | Accessible mode: stronger geometry and less motion. |
+| `Data ▾` | Opens full-state export/import. |
+| `◆ Gold / ▰ Lime / ◫ Gray / ▣ Red` | Cycle workspace theme: **Goldenrod**, **Lime Analog**, **Grayscale**, and **Deep Red**. |
+| `Display ▾` | Open or close the compact display drawer. |
+| Display drawer | App light/dark, reading light/dark, compact/readable density, and accessibility geometry. |
 
 ## Tab registry and promoted shelf
 
@@ -87,7 +100,7 @@ Tabs are now registered with one object each:
 
 The binding function travels with the tab definition, so future tabs do not need a second `if` chain. This is the first step toward declarative template tabs.
 
-Promotable widgets live in `promotedWidgets`. A promoted widget can stay visible above the workspace while the user moves through other tabs. In 1.31.2, **Event Gantt** is the first promoted widget and can be pinned/unpinned from the Calendar Gantt header.
+Promotable widgets live in `promotedWidgets`. A promoted widget can stay visible above the workspace while the user moves through other tabs. In 1.31.x, **Event Gantt** is the first promoted widget and can be pinned/unpinned from the Calendar Gantt header.
 
 ## Theme and interaction state language
 
@@ -102,7 +115,7 @@ Current visual rules:
 - Destructive actions are quiet until hover/focus or confirmation context.
 - Accessible mode strengthens shape, borders, and patterns rather than relying on animation or color alone.
 
-Goldenrod is the main signal color. It should be used for accents, active controls, rails, and focus treatments, not for large body text.
+Goldenrod remains the default signal color. New themes are now easier to add because the app applies `body[data-bp-theme="..."]` and components consume shared `--bp-*` tokens. The Lime Analog theme is a high-contrast green phosphor/analog style. The Grayscale theme is a monochrome stress test for shape-first interaction states. The Deep Red theme provides a very dark crimson reader/workspace stress case. All registered themes use the same structure rather than separate component skins.
 
 ## Calendar summary
 
@@ -111,7 +124,7 @@ The Calendar is now the main daily workflow surface.
 Important behavior:
 
 - Backpack day starts at `07:00`.
-- Expected arrival defaults to `07:00`; arrival at `07:01` is late.
+- Expected arrival defaults to `07:30`; arrival at `07:31` is late.
 - Expected arrival can be overridden by month in `BP_USER_CONFIG.calendar.expectedArrivalByMonth`.
 - Arrival uses a **Start Day** flow:
   - pending arrival shows a large `> Start Day` action;
@@ -152,7 +165,7 @@ HTML template uploads are treated as trusted authored content and rendered as au
 The current template examples are:
 
 - **Template - Basic**: Newton `F = ma`, simple Markdown plus HTML quote/callout.
-- **Template - Medium**: Wiki Bees, a three-column wiki pattern with left controls, central Markdown, image uploads, and right-side code references.
+- **Template - Medium**: Wiki Bees, a three-column wiki pattern with cascade navigation, central Markdown sections, page image uploads, and side-note Markdown.
 
 See `docs/templates.md` for how to add future custom pages.
 
@@ -171,8 +184,8 @@ Useful placeholders include:
 {{NOTES_FILE}}
 {{BASIC_MD}}
 {{BASIC_HTML}}
-{{WIKI_BEE_DESCRIPTION}}
-{{WIKI_BEE_FAMILIES}}
+{{WIKI_BEE_MD_BUNDLE}}
+{{WIKI_BEE_SIDEBAR_SAMPLE}}
 {{WIKI_BEE_IMAGES}}
 {{WIKI_BEE_WORKER_IMAGE}}
 {{WIKI_BEE_HIVE_IMAGE}}
@@ -196,7 +209,7 @@ Export layers:
 
 See `docs/data-and-imports.md` for detailed rules.
 
-## Intentional limits in 1.31.2
+## Intentional limits in 1.31.10
 
 - No app-level search; use browser Ctrl+F.
 - Repeat behavior is month-copy based, not true recurrence.

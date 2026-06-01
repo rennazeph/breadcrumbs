@@ -2,7 +2,7 @@
 
 Bees are small pollinating insects with an outsized role in many ecosystems. When they visit flowers, pollen can move from one plant to another, helping fruits, seeds, and new plants develop.
 
-This Markdown section is intended to be written directly by the user in a separate file. The Backpack can fetch it as `bees.md`, or the user can upload it manually when the browser blocks local file loading.
+This Markdown section is intended to be written directly by the user in a separate file. The Backpack now uses upload controls instead of fetching neighboring files, so this can be uploaded manually when you want to replace the bundled demo.
 
 ## Why this section exists
 

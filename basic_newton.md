@@ -1,5 +1,4 @@
-# Newton's Second Law: F = ma🐶
-
+# Newton's Second Law: F = ma
 
 This basic template uses a physics example so it is visually distinct from the medium Wiki Bees template. It demonstrates one Markdown source, one optional HTML block, placeholders, and one copyable formula block.
 
@@ -30,4 +29,3 @@ F = m × a
 F = 4 kg × 3 m/s²
 F = 12 N
 ~~~
-🐶
