@@ -1,112 +1,210 @@
-# The Backpack Alpha — Split Build v3
+# The Backpack 1.31.2 — Split Build
 
-Open `index.html` through a local static server whenever possible:
+The Backpack is a direct-open HTML/CSS/JS workspace for daily tracking, reference notes, code snippets, quick post-it notes, and reusable content templates.
 
-```bash
-cd /path/to/backpack
-python -m http.server 8000
+Version **1.31.2** updates the 1.30 baseline with a cleaner tab registry, a promoted-widget shelf, and an upload-first content workflow. Backpack is now expected to open from `index.html` without a local server.
+
+## Run the split build
+
+Open `index.html` directly in the browser.
+
+```txt
+/backpack/index.html
 ```
 
-Then open `http://localhost:8000`.
+Promoted Event Gantt shelf controls were compacted and the duplicated inner Unpin control was removed. Content documents are loaded through upload controls inside the relevant tabs. The app no longer checks neighboring Markdown/HTML files with `fetch()`, so it does not need `python -m http.server` for normal use.
 
-## Main folders
+## Folder map
 
 ```txt
 /backpack
 ├─ index.html
-├─ css/backpack.css
-├─ js/backpack.js
-└─ content
-   ├─ notes.md
-   ├─ bees.md
-   ├─ bees_quote.html
-   ├─ Bee_Description.md
-   ├─ Bee_Families.md
-   └─ images
-      ├─ bee_worker.svg
-      └─ bee_hive.svg
+├─ css/
+│  └─ backpack.css
+├─ js/
+│  └─ backpack.js
+├─ content/                  Optional authoring/source examples
+│  ├─ notes.md
+│  ├─ basic_newton.md
+│  ├─ basic_newton_quote.html
+│  ├─ wiki/                    Template - Medium upload bundle examples
+│  │  ├─ index__orientation.md
+│  │  ├─ template_overview__registry_model.md
+│  │  └─ ...
+│  └─ images/
+│     ├─ bee_worker.svg
+│     ├─ bee_hive.svg
+│     ├─ bee_flower.svg
+│     ├─ bee_food.svg
+│     └─ bee_gallery.svg
+├─ docs/
+│  ├─ calendar.md
+│  ├─ quick-notes.md
+│  ├─ templates.md
+│  ├─ data-and-imports.md
+│  ├─ regression-checklist.md
+│  ├─ release-1.30.md
+│  ├─ release-1.31.md
+│  └─ release-1.31.2.md
+└─ README.md
 ```
 
-## Theme controls
+The `content/` folder remains useful as an authoring scaffold, but the live app reads user content from uploads and cached state.
 
-The app has two theme controls:
+## Current tab map
 
-- App theme: changes the Backpack chrome and workspace colors.
-- Reading theme: changes imported Markdown/reading windows independently.
+| Tab | Purpose | Data/storage notes |
+|---|---|---|
+| Calendar | Start Day arrival flow, month view, events, repeat-this-month copies, Event Gantt, calendar tools | Stored in `appState.calendar`; full export and calendar-only export both support this data. Event Gantt can be pinned to the promoted shelf. |
+| Notes | Main Markdown import display | Upload Markdown; Markdown is escaped and cached in `appState.notes`. |
+| Code Blocks | Copy-ready command/template snippets with placeholders | Static snippet definitions in JS; uses placeholder values from Settings. |
+| Quick Notes | Fixed-grid post-it board | Stored in `appState.quickNotes`; supports board-only export/import. |
+| CSS Museum | Instructional component/template examples | HTML comments in examples are documentation. |
+| Template - Basic | Simple custom page template using Newton `F = ma` | Upload Markdown and trusted HTML, or load the bundled demo. |
+| Template - Medium | Three-column wiki-style Bees page | Upload a multi-file Markdown bundle from `content/wiki/`, plus optional page images and side-note Markdown. Uploaded images are stored as data URLs in state. |
+| Placeholders | Project paths, reusable values, header quote, path derivation | Stored in `appState.placeholders`; used by snippets, templates, Markdown, and Museum examples. |
 
-This allows the app to stay dark while loaded notes remain light, or the reverse.
+## Global controls
+
+Top-right controls are icon-only to preserve compact layout:
+
+| Icon | Function |
+|---|---|
+| `⤴` | Export full Backpack state. |
+| `⤵` | Import full Backpack state. |
+| `◐ / ☼` | App chrome dark/light theme. |
+| `◨ / ◩` | Reading-window theme, independent from app theme. |
+| `▤ / ▥` | Compact/readable density. |
+| `♿` | Accessible mode: stronger geometry and less motion. |
+
+## Tab registry and promoted shelf
+
+Tabs are now registered with one object each:
+
+```js
+{ id, label, icon, group, render, bind }
+```
+
+The binding function travels with the tab definition, so future tabs do not need a second `if` chain. This is the first step toward declarative template tabs.
+
+Promotable widgets live in `promotedWidgets`. A promoted widget can stay visible above the workspace while the user moves through other tabs. In 1.31.2, **Event Gantt** is the first promoted widget and can be pinned/unpinned from the Calendar Gantt header.
+
+## Theme and interaction state language
+
+The UI should remain understandable without depending only on color.
+
+Current visual rules:
+
+- Hover is temporary chrome: inset shift, rail, or inner frame.
+- Focus is stronger than hover and should support keyboard navigation.
+- Selected calendar days use an internal frame, not an external dotted outline.
+- Today uses a small structural marker.
+- Destructive actions are quiet until hover/focus or confirmation context.
+- Accessible mode strengthens shape, borders, and patterns rather than relying on animation or color alone.
+
+Goldenrod is the main signal color. It should be used for accents, active controls, rails, and focus treatments, not for large body text.
+
+## Calendar summary
+
+The Calendar is now the main daily workflow surface.
+
+Important behavior:
+
+- Backpack day starts at `07:00`.
+- Expected arrival defaults to `07:00`; arrival at `07:01` is late.
+- Expected arrival can be overridden by month in `BP_USER_CONFIG.calendar.expectedArrivalByMonth`.
+- Arrival uses a **Start Day** flow:
+  - pending arrival shows a large `> Start Day` action;
+  - logged arrival becomes a quiet audit strip with stats.
+- Arrival input is plain text, not native `input[type=time]`.
+- Accepted quick formats include `7`, `700`, `730`, `7:30`, and `7.30`.
+- Mouse-friendly minute controls support `−5`, `−1`, `+1`, and `+5`.
+- Timed events use structured event fields, not title parsing as permanent state.
+- The event input still accepts convenient text like `09:00 - 10:30 Review` and parses it once when creating/editing.
+- Repeating events are **Repeat this month** copies, not true infinite recurrence.
+- Event Gantt can be promoted to the persistent shelf above the workspace.
+- Calendar tools support calendar-only export/import, repair, cleanup, diagnostics, and selected-day clearing.
+
+See `docs/calendar.md` for the detailed event and arrival model.
+
+## Quick Notes summary
+
+Quick Notes are a fixed-grid board, not an infinite whiteboard.
+
+Important behavior:
+
+- Notes snap to a logical grid.
+- Notes may overlap by at most the configured overlap tolerance.
+- The newest moved note rises to the top.
+- Titles are editable in the note header.
+- Movement happens from the empty bottom chrome.
+- Footer controls include note background color, text color, resize, and delete.
+- Quick Notes support board-only export/import and are also included in full Backpack export.
+
+See `docs/quick-notes.md` for the detailed storage and interaction model.
+
+## Notes and templates
+
+Markdown files are safe/escaped and are the preferred format for long prose.
+
+HTML template uploads are treated as trusted authored content and rendered as authored. Do not load untrusted HTML files into template sections.
+
+The current template examples are:
+
+- **Template - Basic**: Newton `F = ma`, simple Markdown plus HTML quote/callout.
+- **Template - Medium**: Wiki Bees, a three-column wiki pattern with left controls, central Markdown, image uploads, and right-side code references.
+
+See `docs/templates.md` for how to add future custom pages.
 
 ## Placeholder path workflow
 
-Open **Placeholders** and set `PROJECT_PATH` once. Then press **Derive split paths from PROJECT_PATH**.
+Open **Placeholders**, set `PROJECT_PATH`, then press **Derive split paths from PROJECT_PATH**.
 
-This fills reusable path placeholders such as:
+Useful placeholders include:
 
-- `{{CONTENT_PATH}}`
-- `{{HTML_ENTRY}}`
-- `{{CSS_PATH}}`
-- `{{JS_PATH}}`
-- `{{NOTES_FILE}}`
-- `{{BEES_MD}}`
-- `{{BEES_QUOTE}}`
-- `{{WIKI_BEE_DESCRIPTION}}`
-- `{{WIKI_BEE_FAMILIES}}`
-- `{{WIKI_BEE_IMAGES}}`
-- `{{WIKI_BEE_WORKER_IMAGE}}`
-- `{{WIKI_BEE_HIVE_IMAGE}}`
-- `{{EXPORT_PATH}}`
-
-These can be reused in Code Blocks, Museum examples, Markdown documents, and future custom tabs.
-
-## Wiki Bees tab
-
-The **Wiki Bees** tab is the first serious custom-page test.
-
-It demonstrates:
-
-- A left control/index column.
-- A middle Markdown reading column.
-- A right reference column with copyable code and a local image viewer.
-- Fetch-first Markdown loading with upload fallback.
-- Local images referenced from `content/images` instead of embedded into exported state.
-
-The images are intentionally stored as local files to keep state exports small.
-
-
-## Visual pass notes: Goldenrod + code snippets
-
-This build uses goldenrod as the main accent motive across light and dark themes. The app keeps dark navy/gray surfaces for contrast and uses goldenrod for active tabs, focus outlines, snippet borders, and important accents rather than long body text.
-
-Code Blocks are intentionally denser around headings/descriptions, while the copy-ready output area gets more visual space and a smaller monospace stack:
-
-```css
---bp-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+```txt
+{{PROJECT_PATH}}
+{{CONTENT_PATH}}
+{{HTML_ENTRY}}
+{{CSS_PATH}}
+{{JS_PATH}}
+{{NOTES_FILE}}
+{{BASIC_MD}}
+{{BASIC_HTML}}
+{{WIKI_BEE_DESCRIPTION}}
+{{WIKI_BEE_FAMILIES}}
+{{WIKI_BEE_IMAGES}}
+{{WIKI_BEE_WORKER_IMAGE}}
+{{WIKI_BEE_HIVE_IMAGE}}
+{{EXPORT_PATH}}
+{{HEADER_QUOTE}}
 ```
 
-This should make code easier to scan without making every snippet card too tall.
+Unknown placeholders stay visible so unfinished templates are easy to diagnose.
 
+## Data and import/export
 
-## v5 custom-page/content system notes
+Backpack uses browser `localStorage` for convenience autosave, but JSON export is the primary save/backup mechanism.
 
-- Long Markdown content should live in `/content` and be registered through the shared content source helpers.
-- `Template - Basic` demonstrates a simple page with Markdown + one HTML section.
-- `Template - Medium` demonstrates a wiki-style page with left controls, a central Markdown reader, right-side snippets, and local images.
-- The reading theme button changes document windows independently from the app theme.
-- The density button switches between compact and readable spacing.
-- Keep images as local files in `/content/images`; do not embed them into exported state unless a future option explicitly enables that.
+Export layers:
 
+- Full Backpack export/import: whole app state.
+- Calendar-only export/import: replaces only Calendar state.
+- Quick Notes board export/import: replaces only Quick Notes board state.
+- Markdown/HTML content uploads: cached in app state.
+- Template image uploads: stored as data URLs in app state.
 
-## v6 patch notes
+See `docs/data-and-imports.md` for detailed rules.
 
-- The whole project now uses the configured monospace stack for a more consistent technical/workspace look.
-- The header quote is controlled by the `{{HEADER_QUOTE}}` placeholder in Placeholder Settings.
-- Reading window controls were restyled so the classic close/control boxes remain visible across reading themes.
-- Template callouts now use the reading theme colors, so they remain readable in dark and light reading modes.
-- Light app theme keeps code blocks dark to make snippets easier to identify.
+## Intentional limits in 1.31.2
 
-## v7 notes
+- No app-level search; use browser Ctrl+F.
+- Repeat behavior is month-copy based, not true recurrence.
+- Gantt events are visualized but not drag-resizable yet.
+- Uploaded image data URLs can increase exported JSON size.
+- HTML template files are trusted authored content.
+- Native color pickers are still used for Quick Notes.
 
-- Template - Basic now uses a Newton F = ma example so it is distinct from Template - Medium.
-- Template - Medium / Wiki Bees now has richer bee description, family notes, callout usage, and more copy examples.
-- CSS Museum has been stabilized with overflow-safe cards and an added Basic Formula Page Template.
-- Basic template content lives in `content/basic_newton.md` and `content/basic_newton_quote.html`.
+## Release checklist
+
+See `docs/regression-checklist.md` before labeling a future baseline.

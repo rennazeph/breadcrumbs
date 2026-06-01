@@ -3,13 +3,18 @@
      * Edit this area first when monthly arrival expectations or grid size change.
      ***************************************************************************/
     const BP_USER_CONFIG = {
-      appVersion: "0.1.0-alpha",
+      appVersion: "1.31.2",
       storageKey: "the-backpack-alpha-state-v1",
-      notesFile: "notes.md",
-      beesMarkdownFile: "content/basic_newton.md",
-      beesQuoteFile: "content/basic_newton_quote.html",
-      wikiBeeDescriptionFile: "content/Bee_Description.md",
-      wikiBeeFamiliesFile: "content/Bee_Families.md",
+      contentLabels: {
+        notes: "notes.md",
+        basicMarkdown: "basic_newton.md",
+        basicHtml: "basic_newton_quote.html",
+        wikiBundle: "content/wiki/*.md",
+        wikiSidebar: "selected page side-note .md",
+        wikiImage: "selected page image",
+        wikiWorkerImage: "bee_worker.svg",
+        wikiHiveImage: "bee_hive.svg"
+      },
 
       calendar: {
         dayStartHour: 7,
@@ -84,13 +89,251 @@
       return Number(match[1]) * 60 + Number(match[2]);
     }
 
-    function normalizeTimePrefix(title) {
-      const match = String(title || "").trim().match(/^(\d{1,2}):(\d{2})(?:\s*-\s*|\s+)?(.+)?$/);
-      if (!match) return null;
-      const hour = Number(match[1]);
-      const minute = Number(match[2]);
-      if (hour > 23 || minute > 59) return null;
+    function validClockParts(hour, minute) {
+      return Number.isInteger(hour) && Number.isInteger(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+    }
+
+    function clockPartsToTime(hour, minute) {
       return `${pad2(hour)}:${pad2(minute)}`;
+    }
+
+    function parseEventSchedule(title) {
+      const raw = String(title || "").trim();
+      const range = raw.match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})(?:\s*-\s*|\s+)?(.*)$/);
+      if (range) {
+        const sh = Number(range[1]);
+        const sm = Number(range[2]);
+        const eh = Number(range[3]);
+        const em = Number(range[4]);
+        if (!validClockParts(sh, sm) || !validClockParts(eh, em)) return null;
+        const start = sh * 60 + sm;
+        let end = eh * 60 + em;
+        if (end <= start) end = Math.min(1440, start + 60);
+        return {
+          start,
+          end,
+          startTime: clockPartsToTime(sh, sm),
+          endTime: clockPartsToTime(Math.floor(end / 60), end % 60),
+          duration: end - start,
+          hasRange: true,
+          title: (range[5] || "").trim() || raw
+        };
+      }
+
+      const startOnly = raw.match(/^(\d{1,2}):(\d{2})(?:\s*-\s*|\s+)?(.*)$/);
+      if (!startOnly) return null;
+      const hour = Number(startOnly[1]);
+      const minute = Number(startOnly[2]);
+      if (!validClockParts(hour, minute)) return null;
+      const start = hour * 60 + minute;
+      const end = Math.min(1440, start + 60);
+      return {
+        start,
+        end,
+        startTime: clockPartsToTime(hour, minute),
+        endTime: clockPartsToTime(Math.floor(end / 60), end % 60),
+        duration: end - start,
+        hasRange: false,
+        title: (startOnly[3] || "").trim() || raw
+      };
+    }
+
+    function normalizeTimePrefix(title) {
+      return parseEventSchedule(title)?.startTime || null;
+    }
+
+    function validTimeString(value) {
+      return timeToMinutes(value) != null;
+    }
+
+    function parseLooseTimeInput(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const separated = raw.match(/^(\d{1,2})\s*[:.hH ]\s*(\d{1,2})$/);
+      if (separated) {
+        const hour = Number(separated[1]);
+        const minute = Number(separated[2]);
+        return validClockParts(hour, minute) ? clockPartsToTime(hour, minute) : "";
+      }
+      const digits = raw.replace(/\D/g, "");
+      if (!digits) return "";
+      let hour = null;
+      let minute = 0;
+      if (digits.length <= 2) {
+        hour = Number(digits);
+      } else if (digits.length === 3) {
+        hour = Number(digits.slice(0, 1));
+        minute = Number(digits.slice(1));
+      } else if (digits.length === 4) {
+        hour = Number(digits.slice(0, 2));
+        minute = Number(digits.slice(2));
+      } else {
+        return "";
+      }
+      return validClockParts(hour, minute) ? clockPartsToTime(hour, minute) : "";
+    }
+
+    function offsetTimeString(time, deltaMinutes) {
+      const base = timeToMinutes(parseLooseTimeInput(time) || time);
+      if (base == null) return "";
+      return minutesToTime(Math.max(0, Math.min(1439, base + Number(deltaMinutes || 0))));
+    }
+
+    function minutesToTime(minutes) {
+      const clamped = Math.max(0, Math.min(1439, Number(minutes) || 0));
+      return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
+    }
+
+    function normalizeRepeatDays(days) {
+      return Array.isArray(days)
+        ? [...new Set(days.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b)
+        : [];
+    }
+
+    function eventDraftFromInput(input) {
+      const raw = String(input || "").trim();
+      const parsed = parseEventSchedule(raw);
+      if (!parsed) {
+        return {
+          title: raw,
+          startTime: "",
+          endTime: "",
+          durationMode: "untimed"
+        };
+      }
+      return {
+        title: parsed.title,
+        startTime: parsed.startTime,
+        endTime: parsed.endTime,
+        durationMode: parsed.hasRange ? "range" : "default"
+      };
+    }
+
+    function eventInputValue(event) {
+      const normalized = normalizeEvent(event);
+      if (!normalized.startTime) return normalized.title;
+      const timePart = normalized.durationMode === "range" && normalized.endTime
+        ? `${normalized.startTime} - ${normalized.endTime}`
+        : normalized.startTime;
+      return `${timePart} ${normalized.title}`.trim();
+    }
+
+    function createCalendarEvent({ titleInput, priority = "normal", notes = "", repeatId = null, repeatDays = [], repeatSourceDate = null, repeatGenerated = false }) {
+      const draft = eventDraftFromInput(titleInput);
+      return normalizeEvent({
+        id: uid("evt"),
+        title: draft.title,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        durationMode: draft.durationMode,
+        priority,
+        notes,
+        repeatId,
+        repeatDays,
+        repeatSourceDate,
+        repeatGenerated,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    function normalizeEvent(input = {}) {
+      const fallbackTitle = String(input.title || input.name || "Untitled event").trim() || "Untitled event";
+      let parsedFromLegacyTitle = null;
+      let title = fallbackTitle;
+      let startTime = validTimeString(input.startTime) ? input.startTime : "";
+      let endTime = validTimeString(input.endTime) ? input.endTime : "";
+      let durationMode = ["range", "default", "untimed"].includes(input.durationMode) ? input.durationMode : "";
+
+      if (!startTime) {
+        parsedFromLegacyTitle = parseEventSchedule(fallbackTitle);
+        if (parsedFromLegacyTitle) {
+          title = parsedFromLegacyTitle.title;
+          startTime = parsedFromLegacyTitle.startTime;
+          endTime = parsedFromLegacyTitle.endTime;
+          durationMode = parsedFromLegacyTitle.hasRange ? "range" : "default";
+        }
+      }
+
+      if (startTime && !durationMode) durationMode = endTime ? "range" : "default";
+      if (!startTime) durationMode = "untimed";
+
+      if (startTime) {
+        const start = timeToMinutes(startTime);
+        let end = validTimeString(endTime) ? timeToMinutes(endTime) : null;
+        if (durationMode !== "range" || end == null || end <= start) {
+          end = Math.min(1439, start + 60);
+          endTime = minutesToTime(end);
+          durationMode = "default";
+        }
+      } else {
+        endTime = "";
+      }
+
+      const priority = ["normal", "high", "highest"].includes(input.priority) ? input.priority : "normal";
+      const repeatDays = normalizeRepeatDays(input.repeatDays);
+      const repeatId = input.repeatId && repeatDays.length ? String(input.repeatId) : null;
+      const repeatSourceDate = /^\d{4}-\d{2}-\d{2}$/.test(String(input.repeatSourceDate || "")) ? input.repeatSourceDate : null;
+      const repeatGenerated = Boolean(repeatId && (input.repeatGenerated || repeatSourceDate || repeatDays.length));
+
+      return {
+        ...input,
+        id: input.id || uid("evt"),
+        title,
+        startTime,
+        endTime,
+        durationMode,
+        priority,
+        notes: String(input.notes || ""),
+        repeatId,
+        repeatDays,
+        repeatSourceDate,
+        repeatGenerated,
+        createdAt: input.createdAt || new Date().toISOString(),
+        updatedAt: input.updatedAt || new Date().toISOString()
+      };
+    }
+
+    function getEventSchedule(event) {
+      const normalized = normalizeEvent(event);
+      if (!normalized.startTime) return null;
+      const start = timeToMinutes(normalized.startTime);
+      const end = timeToMinutes(normalized.endTime);
+      if (start == null || end == null) return null;
+      return {
+        start,
+        end: Math.max(start + 1, end),
+        startTime: normalized.startTime,
+        endTime: normalized.endTime,
+        duration: Math.max(1, end - start),
+        hasRange: normalized.durationMode === "range",
+        title: normalized.title
+      };
+    }
+
+    function normalizeCalendarState(calendar = {}) {
+      const normalized = deepMergeDefaults(defaultState.calendar, calendar);
+      normalized.arrivals ||= {};
+      normalized.events ||= {};
+      for (const [dateKey, arrival] of Object.entries(normalized.arrivals)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !arrival || !validTimeString(arrival.arrivalTime)) {
+          delete normalized.arrivals[dateKey];
+        }
+      }
+      for (const [dateKey, dayEvents] of Object.entries(normalized.events)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !Array.isArray(dayEvents)) {
+          delete normalized.events[dateKey];
+          continue;
+        }
+        const seen = new Set();
+        normalized.events[dateKey] = dayEvents.map(event => {
+          const normalizedEvent = normalizeEvent(event);
+          if (seen.has(normalizedEvent.id)) normalizedEvent.id = uid("evt");
+          seen.add(normalizedEvent.id);
+          return normalizedEvent;
+        });
+      }
+      return normalized;
     }
 
     function getBackpackTodayKey() {
@@ -161,25 +404,19 @@
       },
       notes: {
         markdown: "",
-        source: "pending"
+        source: "Upload required"
       },
       bees: {
         markdown: "",
         quoteHtml: "",
-        markdownSource: "pending",
-        quoteSource: "pending"
+        markdownSource: "Bundled demo",
+        quoteSource: "Bundled demo"
       },
       wikiBees: {
-        activeSection: "overview",
-        activeImage: 0,
-        description: {
-          markdown: "",
-          source: "pending"
-        },
-        families: {
-          markdown: "",
-          source: "pending"
-        }
+        activePage: "index",
+        files: {},
+        images: {},
+        demoLoaded: true
       },
       quickNotes: {
         notes: [],
@@ -195,17 +432,16 @@
         NOTES_FILE: "",
         BASIC_MD: "",
         BASIC_HTML: "",
-        WIKI_BEE_DESCRIPTION: "",
-        WIKI_BEE_FAMILIES: "",
+        WIKI_BEE_MD_BUNDLE: "",
+        WIKI_BEE_SIDEBAR_SAMPLE: "",
         WIKI_BEE_IMAGES: "",
         WIKI_BEE_WORKER_IMAGE: "",
         WIKI_BEE_HIVE_IMAGE: "",
         EXPORT_PATH: "",
-        SERVER_PORT: "8000",
         AUTHOR: "",
         CUSTOM_1: "",
         CUSTOM_2: "",
-        HEADER_QUOTE: "An inspiring quote section goes here, holding space between title and customizer buttons"
+        HEADER_QUOTE: "Portable workspace: calendar, notes, snippets, templates, and state export"
       },
       ui: {
         editingEventId: null,
@@ -213,6 +449,17 @@
         readingDark: false,
         density: "compact",
         codeCategory: "all",
+        calendarNewEventOpen: false,
+        calendarToolsOpen: false,
+        calendarDraftEvent: {
+          titleInput: "",
+          priority: "normal",
+          notes: "",
+          repeatDays: []
+        },
+        calendarDraftArrivalTime: "",
+        calendarArrivalEditing: false,
+        promotedWidget: "",
         accessibleMode: false
       }
     };
@@ -223,7 +470,9 @@
       try {
         const raw = localStorage.getItem(BP_USER_CONFIG.storageKey);
         if (!raw) return structuredClone(defaultState);
-        return deepMergeDefaults(defaultState, JSON.parse(raw));
+        const loaded = deepMergeDefaults(defaultState, JSON.parse(raw));
+        loaded.calendar = normalizeCalendarState(loaded.calendar);
+        return loaded;
       } catch (error) {
         console.warn("Backpack state failed to load:", error);
         return structuredClone(defaultState);
@@ -259,6 +508,7 @@
         if (!incoming || typeof incoming !== "object") throw new Error("Invalid state file.");
         if (!confirm("Importing will replace the current Backpack state. Continue?")) return;
         appState = deepMergeDefaults(defaultState, incoming);
+        appState.calendar = normalizeCalendarState(appState.calendar);
         saveState();
         renderApp();
         showToast("Backpack state imported.");
@@ -266,6 +516,179 @@
         console.error(error);
         showToast("Could not import that state file.");
       }
+    }
+
+
+    /***************************************************************************
+     * Calendar release maintenance helpers
+     ***************************************************************************/
+    function exportCalendarState() {
+      const payload = {
+        type: "backpack-calendar",
+        version: BP_USER_CONFIG.appVersion,
+        exportedAt: new Date().toISOString(),
+        calendar: normalizeCalendarState(appState.calendar)
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backpack-calendar-${toDateKey(new Date())}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Calendar exported.");
+    }
+
+    async function importCalendarStateFile(file) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const incoming = parsed.calendar || parsed.state?.calendar || parsed;
+        if (!incoming || typeof incoming !== "object") throw new Error("Invalid calendar file.");
+        if (!confirm("Importing this file will replace only the current Calendar data. Continue?")) return;
+        appState.calendar = normalizeCalendarState(incoming);
+        appState.activeTab = "calendar";
+        saveState();
+        renderApp();
+        showToast("Calendar imported.");
+      } catch (error) {
+        console.error(error);
+        showToast("Could not import that calendar file.");
+      }
+    }
+
+    function getCalendarDiagnostics(calendar = appState.calendar) {
+      const diagnostics = {
+        issues: [],
+        stats: {
+          arrivals: 0,
+          eventDays: 0,
+          events: 0,
+          timedEvents: 0,
+          untimedEvents: 0,
+          repeatedEvents: 0,
+          repeatGroups: 0,
+          emptyEventDays: 0
+        }
+      };
+      const repeatIds = new Set();
+      const seenEventIds = new Set();
+
+      for (const [dateKey, arrival] of Object.entries(calendar.arrivals || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          diagnostics.issues.push({ level: "repair", message: `Invalid arrival date key: ${dateKey}` });
+          continue;
+        }
+        if (!arrival || !validTimeString(arrival.arrivalTime)) {
+          diagnostics.issues.push({ level: "repair", message: `Invalid arrival time on ${dateKey}` });
+          continue;
+        }
+        diagnostics.stats.arrivals += 1;
+      }
+
+      for (const [dateKey, dayEvents] of Object.entries(calendar.events || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          diagnostics.issues.push({ level: "repair", message: `Invalid event date key: ${dateKey}` });
+          continue;
+        }
+        if (!Array.isArray(dayEvents)) {
+          diagnostics.issues.push({ level: "repair", message: `Events for ${dateKey} are not an array` });
+          continue;
+        }
+        if (!dayEvents.length) {
+          diagnostics.stats.emptyEventDays += 1;
+          diagnostics.issues.push({ level: "clean", message: `Empty event list on ${dateKey}` });
+          continue;
+        }
+        diagnostics.stats.eventDays += 1;
+        for (const event of dayEvents) {
+          diagnostics.stats.events += 1;
+          if (!event || typeof event !== "object") {
+            diagnostics.issues.push({ level: "repair", message: `Invalid event object on ${dateKey}` });
+            continue;
+          }
+          if (!event.id) diagnostics.issues.push({ level: "repair", message: `Missing event id on ${dateKey}` });
+          if (event.id && seenEventIds.has(event.id)) diagnostics.issues.push({ level: "repair", message: `Duplicate event id ${event.id}` });
+          if (event.id) seenEventIds.add(event.id);
+          if (!String(event.title || "").trim()) diagnostics.issues.push({ level: "repair", message: `Missing title on ${dateKey}` });
+          if (!["normal", "high", "highest"].includes(event.priority)) diagnostics.issues.push({ level: "repair", message: `Invalid priority on ${dateKey}` });
+          const schedule = getEventSchedule(event);
+          if (schedule) {
+            diagnostics.stats.timedEvents += 1;
+            if (schedule.end <= schedule.start) diagnostics.issues.push({ level: "repair", message: `Invalid time range on ${dateKey}` });
+          } else {
+            diagnostics.stats.untimedEvents += 1;
+          }
+          if (event.repeatId) {
+            diagnostics.stats.repeatedEvents += 1;
+            repeatIds.add(event.repeatId);
+            if (!Array.isArray(event.repeatDays) || !event.repeatDays.length) diagnostics.issues.push({ level: "repair", message: `Repeat event missing repeat days on ${dateKey}` });
+          }
+        }
+      }
+      diagnostics.stats.repeatGroups = repeatIds.size;
+      return diagnostics;
+    }
+
+    function cleanEmptyCalendarDays(calendar = appState.calendar) {
+      let removed = 0;
+      for (const [dateKey, events] of Object.entries(calendar.events || {})) {
+        if (!Array.isArray(events) || events.length === 0) {
+          delete calendar.events[dateKey];
+          removed += 1;
+        }
+      }
+      return removed;
+    }
+
+    function repairCalendarState() {
+      const before = getCalendarDiagnostics(appState.calendar);
+      appState.calendar = normalizeCalendarState(appState.calendar);
+      const removed = cleanEmptyCalendarDays(appState.calendar);
+      const after = getCalendarDiagnostics(appState.calendar);
+      saveState();
+      renderApp();
+      showToast(`Calendar repaired. ${before.issues.length} issue${before.issues.length === 1 ? "" : "s"} checked, ${removed} empty day${removed === 1 ? "" : "s"} cleaned, ${after.issues.length} remaining.`);
+    }
+
+    function clearSelectedCalendarDay() {
+      const dateKey = appState.calendar.selectedDate;
+      if (!dateKey) return;
+      const eventCount = (appState.calendar.events[dateKey] || []).length;
+      const hasArrival = Boolean(appState.calendar.arrivals[dateKey]);
+      if (!eventCount && !hasArrival) {
+        showToast("Selected day is already empty.");
+        return;
+      }
+      const parts = [];
+      if (eventCount) parts.push(`${eventCount} event${eventCount === 1 ? "" : "s"}`);
+      if (hasArrival) parts.push("arrival time");
+      if (!confirm(`Clear ${parts.join(" and ")} from ${dateKey}?`)) return;
+      delete appState.calendar.events[dateKey];
+      delete appState.calendar.arrivals[dateKey];
+      saveState();
+      renderApp();
+      showToast("Selected calendar day cleared.");
+    }
+
+    function getRepeatGroupSummaries(monthKey = appState.calendar.currentMonth) {
+      const groups = new Map();
+      for (const [dateKey, events] of Object.entries(appState.calendar.events || {})) {
+        if (!dateKey.startsWith(monthKey) || !Array.isArray(events)) continue;
+        for (const event of events) {
+          if (!event.repeatId) continue;
+          const group = groups.get(event.repeatId) || {
+            repeatId: event.repeatId,
+            title: eventDisplayTitle(event),
+            time: eventTimeLabel(getEventSchedule(event)),
+            priority: normalizePriority(event.priority),
+            count: 0
+          };
+          group.count += 1;
+          groups.set(event.repeatId, group);
+        }
+      }
+      return [...groups.values()].sort((a, b) => `${a.time} ${a.title}`.localeCompare(`${b.time} ${b.title}`));
     }
 
     /***************************************************************************
@@ -377,31 +800,61 @@
     }
 
     /***************************************************************************
-     * Tab registry
+     * Tab registry + promoted shelf
+     * Add future tabs by registering one object here. Binding now travels with the
+     * tab definition instead of living in a second switch/if chain.
      ***************************************************************************/
-    const tabs = [
-      { id: "calendar", label: "Calendar", icon: "📅", render: renderCalendar },
-      { id: "notes", label: "Notes", icon: "📓", render: renderNotes },
-      { id: "code", label: "Code Blocks", icon: "⌘", render: renderCodeBlocks },
-      { id: "quicknotes", label: "Quick Notes", icon: "🗒️", render: renderQuickNotes },
-      { id: "museum", label: "CSS Museum", icon: "🏛️", render: renderMuseum },
-      { id: "bees", label: "Template - Basic", icon: "🐝", render: renderBeesInfo },
-      { id: "wikibees", label: "Template - Medium", icon: "📚", render: renderWikiBees },
-      { id: "settings", label: "Placeholders", icon: "⚙️", render: renderSettings }
-    ];
+    const tabs = [];
+
+    function registerTab(tab) {
+      tabs.push({
+        icon: "□",
+        render: () => "",
+        bind: () => {},
+        ...tab
+      });
+      return tab;
+    }
+
+    [
+      { id: "calendar", label: "Calendar", icon: "📅", group: "workflow", render: renderCalendar, bind: bindCalendar },
+      { id: "notes", label: "Notes", icon: "📓", group: "content", render: renderNotes, bind: bindNotes },
+      { id: "code", label: "Code Blocks", icon: "⌘", group: "tools", render: renderCodeBlocks, bind: bindCodeBlocks },
+      { id: "quicknotes", label: "Quick Notes", icon: "🗒️", group: "workflow", render: renderQuickNotes, bind: bindQuickNotes },
+      { id: "museum", label: "CSS Museum", icon: "🏛️", group: "reference", render: renderMuseum, bind: bindMuseum },
+      { id: "bees", label: "Template - Basic", icon: "🐝", group: "templates", render: renderBeesInfo, bind: bindBeesInfo },
+      { id: "wikibees", label: "Template - Medium", icon: "📚", group: "templates", render: renderWikiBees, bind: bindWikiBees },
+      { id: "settings", label: "Placeholders", icon: "⚙️", group: "settings", render: renderSettings, bind: bindSettings }
+    ].forEach(registerTab);
+
+    const promotedWidgets = {
+      calendarGantt: {
+        id: "calendarGantt",
+        label: "Event Gantt",
+        icon: "▦",
+        homeTab: "calendar",
+        render: renderPromotedCalendarGantt
+      }
+    };
+
+    function getActiveTabConfig() {
+      return tabs.find(item => item.id === appState.activeTab) || tabs[0];
+    }
 
     function renderApp() {
       applyGlobalUIState();
       renderTabs();
-      const tab = tabs.find(item => item.id === appState.activeTab) || tabs[0];
+      renderPromotedShelf();
+      const tab = getActiveTabConfig();
       $("#bpWorkspace").innerHTML = tab.render();
       bindCurrentTab(tab.id);
+      updateCalendarTimeRail();
       saveState();
     }
 
     function renderTabs() {
       $("#bpTabs").innerHTML = tabs.map(tab => `
-        <button class="bp-tab" type="button" data-tab="${tab.id}" aria-selected="${tab.id === appState.activeTab}">
+        <button class="bp-tab" type="button" data-tab="${tab.id}" data-tab-group="${tab.group || 'general'}" aria-selected="${tab.id === appState.activeTab}">
           <span aria-hidden="true">${tab.icon}</span>
           <span>${tab.label}</span>
         </button>
@@ -409,14 +862,55 @@
     }
 
     function bindCurrentTab(tabId) {
-      if (tabId === "calendar") bindCalendar();
-      if (tabId === "notes") bindNotes();
-      if (tabId === "code") bindCodeBlocks();
-      if (tabId === "quicknotes") bindQuickNotes();
-      if (tabId === "museum") bindMuseum();
-      if (tabId === "bees") bindBeesInfo();
-      if (tabId === "wikibees") bindWikiBees();
-      if (tabId === "settings") bindSettings();
+      const tab = tabs.find(item => item.id === tabId) || tabs[0];
+      tab.bind?.();
+    }
+
+    function isWidgetPromoted(widgetId) {
+      return appState.ui.promotedWidget === widgetId;
+    }
+
+    function setPromotedWidget(widgetId) {
+      appState.ui.promotedWidget = widgetId && promotedWidgets[widgetId] ? widgetId : "";
+      saveState();
+      renderApp();
+    }
+
+    function renderPromotedShelf() {
+      const shelf = $("#bpPromotedShelf");
+      if (!shelf) return;
+      const widget = promotedWidgets[appState.ui.promotedWidget];
+      shelf.hidden = !widget;
+      shelf.innerHTML = widget ? widget.render() : "";
+    }
+
+    function renderPromotedInlineNotice(widgetId) {
+      const widget = promotedWidgets[widgetId];
+      if (!widget) return "";
+      return `
+        <section class="bp-promoted-inline-note" aria-label="${escapeHTML(widget.label)} is pinned">
+          <strong>${escapeHTML(widget.icon)} ${escapeHTML(widget.label)} is pinned to the shelf.</strong>
+          <span>It stays visible while you move through other tabs.</span>
+          <button type="button" data-promote-widget="${escapeHTML(widgetId)}" data-promote-action="open-home">Open source tab</button>
+          <button type="button" data-promote-widget="${escapeHTML(widgetId)}" data-promote-action="clear">Unpin</button>
+        </section>
+      `;
+    }
+
+    function renderPromotedCalendarGantt() {
+      const dateKey = appState.calendar.selectedDate || getBackpackTodayKey();
+      const events = sortedEvents(appState.calendar.events[dateKey] || []);
+      return `
+        <div class="bp-promoted-widget" data-promoted-widget="calendarGantt">
+          <div class="bp-promoted-head">
+            <strong>▦ Event Gantt</strong>
+            <span>${escapeHTML(dateLabel(dateKey))}</span>
+            <button type="button" class="bp-promoted-mini" data-promote-widget="calendarGantt" data-promote-action="open-home" title="Open Calendar" aria-label="Open Calendar">Calendar</button>
+            <button type="button" class="bp-promoted-mini" data-promote-widget="calendarGantt" data-promote-action="clear" title="Unpin Event Gantt" aria-label="Unpin Event Gantt">×</button>
+          </div>
+          ${renderEventTimeRail(dateKey, events, { promoted: true })}
+        </div>
+      `;
     }
 
     /***************************************************************************
@@ -443,14 +937,511 @@
       return null;
     }
 
+    const PRIORITY_META = {
+      highest: { id: "highest", label: "Highest", symbol: "◆" },
+      high: { id: "high", label: "High", symbol: "◇" },
+      normal: { id: "normal", label: "Normal", symbol: "·" }
+    };
+
+    const PRIORITY_ORDER = ["highest", "high", "normal"];
+
+    function normalizePriority(priority) {
+      return PRIORITY_META[priority] ? priority : "normal";
+    }
+
+    function getPriorityCounts(events = []) {
+      return events.reduce((counts, event) => {
+        counts[normalizePriority(event.priority)] += 1;
+        return counts;
+      }, { normal: 0, high: 0, highest: 0 });
+    }
+
+    function prioritySymbol(priority) {
+      return PRIORITY_META[normalizePriority(priority)].symbol;
+    }
+
+    function priorityLabel(priority) {
+      return PRIORITY_META[normalizePriority(priority)].label;
+    }
+
+    function priorityOptionLabel(priority) {
+      const meta = PRIORITY_META[normalizePriority(priority)];
+      return `${meta.symbol} ${meta.label}`;
+    }
+
+    function renderPriorityOptions(selected = "normal") {
+      const selectedPriority = normalizePriority(selected);
+      return ["normal", "high", "highest"].map(priority =>
+        `<option value="${priority}" ${priority === selectedPriority ? "selected" : ""}>${priorityOptionLabel(priority)}</option>`
+      ).join("");
+    }
+
+    function getRepeatGroupEvents(repeatId) {
+      if (!repeatId) return [];
+      const matches = [];
+      for (const [dateKey, events] of Object.entries(appState.calendar.events || {})) {
+        for (const event of events || []) {
+          if (event.repeatId === repeatId) matches.push({ dateKey, event });
+        }
+      }
+      return matches;
+    }
+
+    function repeatGroupCount(repeatId) {
+      return getRepeatGroupEvents(repeatId).length;
+    }
+
+    function repeatSummary(event) {
+      if (!event?.repeatId) return "";
+      const count = repeatGroupCount(event.repeatId);
+      return `↻ Repeated${count ? ` · ${count} this month` : ""}`;
+    }
+
+    function renderDayEventBand(events = []) {
+      if (!events.length) return `<div class="bp-day-band bp-day-band-empty" aria-hidden="true"></div>`;
+      const sorted = sortedEvents(events);
+      const visible = sorted.slice(0, 7);
+      const more = sorted.length - visible.length;
+      const labels = getPriorityCounts(events);
+      const aria = `${events.length} event${events.length === 1 ? "" : "s"}: ${labels.highest} highest, ${labels.high} high, ${labels.normal} normal`;
+      return `
+        <div class="bp-day-band" aria-label="${escapeHTML(aria)}" title="${escapeHTML(aria)}">
+          ${visible.map(event => `<span class="bp-day-band-segment bp-day-band-${normalizePriority(event.priority)}"></span>`).join("")}
+          ${more > 0 ? `<span class="bp-day-band-more">+${more}</span>` : ""}
+        </div>
+      `;
+    }
+
     function sortedEvents(events) {
       return [...events].sort((a, b) => {
-        const aTime = normalizeTimePrefix(a.title);
-        const bTime = normalizeTimePrefix(b.title);
-        if (aTime && bTime) return timeToMinutes(aTime) - timeToMinutes(bTime);
-        if (aTime && !bTime) return -1;
-        if (!aTime && bTime) return 1;
+        const aSchedule = getEventSchedule(a);
+        const bSchedule = getEventSchedule(b);
+        if (aSchedule && bSchedule) return aSchedule.start - bSchedule.start;
+        if (aSchedule && !bSchedule) return -1;
+        if (!aSchedule && bSchedule) return 1;
         return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+      });
+    }
+
+    function eventDisplayTitle(event) {
+      return String((typeof event === "object" ? event.title : event) || "Untitled event").trim() || "Untitled event";
+    }
+
+    function eventTimeLabel(schedule) {
+      if (!schedule) return "";
+      return schedule.hasRange ? `${schedule.startTime}-${schedule.endTime}` : schedule.startTime;
+    }
+
+    function eventDurationTitle(schedule) {
+      if (!schedule) return "";
+      return schedule.hasRange ? `${schedule.startTime} to ${schedule.endTime}` : schedule.startTime;
+    }
+
+    function getCalendarDraftEvent() {
+      const fallback = defaultState.ui.calendarDraftEvent;
+      const current = appState.ui.calendarDraftEvent || {};
+      return {
+        titleInput: String(current.titleInput || fallback.titleInput || ""),
+        priority: normalizePriority(current.priority || fallback.priority || "normal"),
+        notes: String(current.notes || fallback.notes || ""),
+        repeatDays: normalizeRepeatDays(current.repeatDays || fallback.repeatDays || [])
+      };
+    }
+
+    function setCalendarDraftEvent(patch = {}) {
+      appState.ui.calendarDraftEvent = {
+        ...getCalendarDraftEvent(),
+        ...patch
+      };
+    }
+
+    function resetCalendarDraftEvent() {
+      appState.ui.calendarDraftEvent = structuredClone(defaultState.ui.calendarDraftEvent);
+    }
+
+    function renderUntimedEventsCompact(events = []) {
+      const untimed = sortedEvents(events).filter(event => !getEventSchedule(event));
+      if (!untimed.length) return "";
+      return `
+        <section class="bp-untimed-events" aria-label="Untimed day items">
+          <h4>Untimed day items</h4>
+          <div class="bp-untimed-list">
+            ${untimed.map(event => `
+              <span class="bp-pill bp-untimed-pill bp-untimed-${normalizePriority(event.priority)}" title="${escapeHTML(eventDisplayTitle(event))}">
+                ${prioritySymbol(event.priority)} ${escapeHTML(eventDisplayTitle(event))}
+              </span>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function getCalendarMonthStats(monthKey) {
+      let arrivals = 0;
+      let late = 0;
+      let onTime = 0;
+      let events = 0;
+      for (const dateKey of Object.keys(appState.calendar.arrivals || {})) {
+        if (!dateKey.startsWith(monthKey)) continue;
+        arrivals += 1;
+        const status = getArrivalStatus(dateKey);
+        if (status === "late") late += 1;
+        if (status === "on-time") onTime += 1;
+      }
+      for (const [dateKey, dayEvents] of Object.entries(appState.calendar.events || {})) {
+        if (!dateKey.startsWith(monthKey)) continue;
+        events += (dayEvents || []).length;
+      }
+      return { arrivals, late, onTime, events };
+    }
+
+    function formatMinutesAsTime(minutes) {
+      if (!Number.isFinite(minutes)) return "—";
+      const clamped = Math.max(0, Math.min(1439, Math.round(minutes)));
+      return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`;
+    }
+
+    function floorToStep(minutes, step = 30) {
+      return Math.max(0, Math.floor((Number(minutes) || 0) / step) * step);
+    }
+
+    function ceilToStep(minutes, step = 30) {
+      return Math.min(1440, Math.ceil((Number(minutes) || 0) / step) * step);
+    }
+
+    function getArrivalRecord(dateKey) {
+      const record = appState.calendar.arrivals?.[dateKey];
+      return record && validTimeString(record.arrivalTime) ? record : null;
+    }
+
+    function hasArrival(dateKey) {
+      return Boolean(getArrivalRecord(dateKey));
+    }
+
+    function getMonthArrivalStatsDetailed(monthKey, selectedDateKey) {
+      const records = Object.entries(appState.calendar.arrivals || {})
+        .filter(([dateKey, record]) => dateKey.startsWith(monthKey) && validTimeString(record?.arrivalTime))
+        .sort(([a], [b]) => a.localeCompare(b));
+      const minutes = records.map(([, record]) => timeToMinutes(record.arrivalTime)).filter(value => value != null);
+      const avgMinutes = minutes.length ? minutes.reduce((sum, value) => sum + value, 0) / minutes.length : null;
+      const lateDates = records
+        .filter(([dateKey, record]) => timeToMinutes(record.arrivalTime) > timeToMinutes(getExpectedArrival(dateKey)))
+        .map(([dateKey]) => dateKey);
+      let sinceLastLate = null;
+      const selected = selectedDateKey || `${monthKey}-01`;
+      const lastLate = lateDates.filter(dateKey => dateKey <= selected).at(-1);
+      if (lastLate) {
+        const dayMs = 24 * 60 * 60 * 1000;
+        sinceLastLate = Math.max(0, Math.round((fromDateKey(selected) - fromDateKey(lastLate)) / dayMs));
+      }
+      return {
+        recorded: records.length,
+        late: lateDates.length,
+        avgLabel: avgMinutes == null ? "—" : formatMinutesAsTime(avgMinutes),
+        sinceLastLateLabel: lateDates.length ? (sinceLastLate == null ? "—" : `${sinceLastLate}d`) : "No late"
+      };
+    }
+
+    function getCalendarDraftArrivalTime() {
+      return String(appState.ui.calendarDraftArrivalTime || "");
+    }
+
+    function setCalendarDraftArrivalTime(value) {
+      appState.ui.calendarDraftArrivalTime = String(value || "");
+    }
+
+    function commitArrivalInput(dateKey, rawValue, { render = true, allowClear = false } = {}) {
+      const normalized = parseLooseTimeInput(rawValue);
+      if (!normalized) {
+        if (allowClear && !String(rawValue || "").trim()) {
+          delete appState.calendar.arrivals[dateKey];
+          setCalendarDraftArrivalTime("");
+          saveState();
+          if (render) renderApp();
+          return true;
+        }
+        showToast("Use a time like 07:00, 700, or 730.");
+        return false;
+      }
+      appState.calendar.arrivals[dateKey] = {
+        arrivalTime: normalized,
+        updatedAt: new Date().toISOString()
+      };
+      setCalendarDraftArrivalTime("");
+      saveState();
+      if (render) renderApp();
+      return true;
+    }
+
+    function renderArrivalStats(monthStats) {
+      return `
+        <div class="bp-arrival-stats" aria-label="Monthly arrival stats">
+          <span>Avg ${monthStats.avgLabel}</span>
+          <span>Recorded ${monthStats.recorded}</span>
+          <span>Late ${monthStats.late}</span>
+          <span>Since late ${monthStats.sinceLastLateLabel}</span>
+        </div>
+      `;
+    }
+
+    function renderArrivalStepButtons() {
+      return `
+        <div class="bp-time-stepper bp-time-stepper-compact" aria-label="Adjust arrival time">
+          <button type="button" data-arrival-step="-5" title="Minus 5 minutes">−5</button>
+          <button type="button" data-arrival-step="-1" title="Minus 1 minute">−1</button>
+          <button type="button" data-arrival-step="1" title="Plus 1 minute">+1</button>
+          <button type="button" data-arrival-step="5" title="Plus 5 minutes">+5</button>
+        </div>
+      `;
+    }
+
+    function renderArrivalControl(dateKey, arrival, expected, status, statusBadge) {
+      const isLogged = Boolean(arrival);
+      const monthStats = getMonthArrivalStatsDetailed(dateKey.slice(0, 7), dateKey);
+      const draftArrival = getCalendarDraftArrivalTime();
+      const editing = Boolean(appState.ui.calendarArrivalEditing);
+      if (!isLogged) {
+        return `
+          <section class="bp-arrival-card bp-arrival-pending">
+            <div class="bp-arrival-card-title">Arrival pending</div>
+            <div class="bp-arrival-pending-grid">
+              <label for="bpArrivalTime">Expected ${expected}</label>
+              <input id="bpArrivalTime" class="bp-time-text-input" type="text" inputmode="numeric" autocomplete="off" placeholder="${expected}" value="${escapeHTML(draftArrival)}" aria-label="Arrival time" data-arrival-mode="pending" />
+              <button type="button" data-calendar-action="draft-arrival-expected" title="Fill expected arrival">${expected}</button>
+              <div class="bp-time-stepper" aria-label="Adjust arrival time">
+                <button type="button" data-arrival-step="-5" title="Minus 5 minutes">−5</button>
+                <button type="button" data-arrival-step="-1" title="Minus 1 minute">−1</button>
+                <button type="button" data-arrival-step="1" title="Plus 1 minute">+1</button>
+                <button type="button" data-arrival-step="5" title="Plus 5 minutes">+5</button>
+              </div>
+              <button type="button" class="bp-start-day-button" data-calendar-action="set-arrival-now" title="Start day with typed time or current time">&gt; Start Day</button>
+            </div>
+          </section>
+        `;
+      }
+      if (editing) {
+        const editValue = draftArrival || arrival;
+        return `
+          <section class="bp-arrival-card bp-arrival-logged bp-arrival-editing">
+            <div class="bp-arrival-state-row">
+              <div>
+                <span class="bp-arrival-kicker">Edit arrival</span>
+                <strong>${escapeHTML(arrival)}</strong>
+              </div>
+              ${statusBadge}
+            </div>
+            <div class="bp-arrival-edit-row">
+              <input id="bpArrivalTime" class="bp-time-text-input" type="text" inputmode="numeric" autocomplete="off" value="${escapeHTML(editValue)}" aria-label="Arrival time" data-arrival-mode="editing" />
+              ${renderArrivalStepButtons()}
+              <button type="button" data-calendar-action="set-arrival-expected" title="Use expected arrival">${expected}</button>
+              <button type="button" data-calendar-action="save-arrival-edit" title="Save arrival edit">Save</button>
+              <button type="button" data-calendar-action="cancel-arrival-edit" title="Discard arrival edit">Discard</button>
+            </div>
+            ${renderArrivalStats(monthStats)}
+          </section>
+        `;
+      }
+      return `
+        <section class="bp-arrival-card bp-arrival-logged">
+          <div class="bp-arrival-state-row">
+            <div>
+              <span class="bp-arrival-kicker">Arrival logged</span>
+              <strong>${escapeHTML(arrival)}</strong>
+            </div>
+            ${statusBadge}
+            <button type="button" data-calendar-action="edit-arrival" title="Edit arrival">Edit</button>
+            <button type="button" data-calendar-action="clear-arrival" title="Clear arrival">×</button>
+          </div>
+          ${renderArrivalStats(monthStats)}
+        </section>
+      `;
+    }
+
+    function renderDayEventPreview(events) {
+      return sortedEvents(events).slice(0, 2).map(event => {
+        const schedule = getEventSchedule(event);
+        const priorityIcon = prioritySymbol(event.priority);
+        const timeLabel = schedule ? (schedule.hasRange ? `${schedule.startTime}-${schedule.endTime}` : schedule.startTime) : "";
+        const label = `${timeLabel ? timeLabel + " " : ""}${eventDisplayTitle(event)}`.trim();
+        return `<span class="bp-day-event-chip bp-day-event-${normalizePriority(event.priority)}" title="${escapeHTML(label)}">${priorityIcon} ${escapeHTML(label)}</span>`;
+      }).join("");
+    }
+
+    function nowMinutesOfDay() {
+      const now = new Date();
+      return now.getHours() * 60 + now.getMinutes();
+    }
+
+    function realTodayKey() {
+      return toDateKey(new Date());
+    }
+
+    function dayTimelinePosition(dateKey) {
+      // The Gantt "now" marker follows the real local clock day.
+      // Backpack day boundaries are still used for arrival/current-day logic,
+      // but a visual clock rail should not jump to 00:00 before 07:00.
+      const selected = fromDateKey(dateKey);
+      const today = fromDateKey(realTodayKey());
+      const selectedMid = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate()).getTime();
+      const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+      if (selectedMid < todayMid) return 100;
+      if (selectedMid > todayMid) return 0;
+      return Math.max(0, Math.min(100, (nowMinutesOfDay() / 1440) * 100));
+    }
+
+    function eventGanttRow(event, dateKey, rowIndex) {
+      const schedule = getEventSchedule(event);
+      if (!schedule) return "";
+      const isToday = dateKey === realTodayKey();
+      const now = nowMinutesOfDay();
+      const status = isToday && schedule.end < now ? "past" : isToday && schedule.start <= now && schedule.end >= now ? "active" : isToday ? "future" : "day";
+      const priority = normalizePriority(event.priority);
+      const timeLabel = eventTimeLabel(schedule);
+      const title = eventDisplayTitle(event);
+      const label = `${eventTimeLabel(schedule)} ${title}`.trim();
+      const durationClass = schedule.hasRange ? "" : " bp-gantt-default-duration";
+      return `
+        <div class="bp-gantt-row bp-gantt-${priority} bp-gantt-${status}" style="--row:${rowIndex};" data-start="${schedule.start}" data-end="${schedule.end}" title="${escapeHTML(label)}">
+          <span class="bp-gantt-row-label"><b>${escapeHTML(timeLabel || schedule.startTime)}</b><span>${escapeHTML(title)}</span></span>
+          <span class="bp-gantt-bar${durationClass}" style="--event-left:0px;--event-width:50px;" title="${escapeHTML(label)}">
+            <i>${escapeHTML(timeLabel)}</i>
+          </span>
+        </div>
+      `;
+    }
+
+    function getGanttWindow(dateKey, timedEvents = []) {
+      const schedules = timedEvents.map(getEventSchedule).filter(Boolean);
+      const arrivalMinutes = timeToMinutes(getArrivalRecord(dateKey)?.arrivalTime);
+      const expectedMinutes = timeToMinutes(getExpectedArrival(dateKey));
+      const anchor = arrivalMinutes ?? expectedMinutes ?? (BP_USER_CONFIG.calendar.dayStartHour * 60);
+      const eventStarts = schedules.map(schedule => schedule.start);
+      const eventEnds = schedules.map(schedule => schedule.end);
+      const earliest = eventStarts.length ? Math.min(anchor, ...eventStarts) : anchor;
+      const latest = eventEnds.length ? Math.max(anchor + 480, ...eventEnds) : anchor + 480;
+      const windowStart = floorToStep(earliest, 30);
+      const minimumEnd = windowStart + 480;
+      const desiredEnd = Math.max(latest, minimumEnd);
+      const windowEnd = Math.max(windowStart + 60, ceilToStep(desiredEnd, 30));
+      return {
+        start: Math.max(0, Math.min(1439, windowStart)),
+        end: Math.max(Math.min(1440, windowEnd), Math.max(0, Math.min(1439, windowStart)) + 60),
+        anchor,
+        startLabel: formatMinutesAsTime(windowStart),
+        endLabel: formatMinutesAsTime(Math.min(1439, windowEnd))
+      };
+    }
+
+    function renderGanttHourMarks(window) {
+      const marks = [];
+      const first = Math.ceil(window.start / 60) * 60;
+      for (let minute = first; minute <= window.end; minute += 60) {
+        marks.push(`<span class="bp-gantt-hour-mark" data-minute="${minute}">${formatMinutesAsTime(minute)}</span>`);
+      }
+      if (!marks.length) marks.push(`<span class="bp-gantt-hour-mark" data-minute="${window.start}">${window.startLabel}</span>`);
+      return marks.join("");
+    }
+
+    function renderEventTimeRail(dateKey, events = [], options = {}) {
+      const timedEvents = sortedEvents(events).filter(event => getEventSchedule(event));
+      const promoted = Boolean(options.promoted);
+      const pinned = isWidgetPromoted('calendarGantt');
+      const promoteLabel = pinned ? 'Unpin' : 'Pin to shelf';
+      const promoteAction = pinned ? 'clear' : 'toggle';
+      const promoteButton = promoted ? '' : `<button type="button" class="bp-gantt-promote" data-promote-widget="calendarGantt" data-promote-action="${promoteAction}">${promoteLabel}</button>`;
+      const selectedIsToday = dateKey === realTodayKey();
+      const standby = dateKey === getBackpackTodayKey() && !hasArrival(dateKey);
+      const window = getGanttWindow(dateKey, timedEvents);
+      const rows = timedEvents.map((event, index) => eventGanttRow(event, dateKey, index)).join("");
+      return `
+        <section class="bp-time-rail-card bp-gantt-card ${standby ? "bp-gantt-standby" : "bp-gantt-active"} ${promoted ? "bp-gantt-card-promoted" : ""}" aria-label="Event Gantt timeline">
+          <div class="bp-time-rail-head">
+            <strong>Event Gantt</strong>
+            <span>${timedEvents.length ? `${timedEvents.length} timed · ${window.startLabel}–${window.endLabel}` : "No timed events"}</span>
+            ${promoteButton}
+          </div>
+          <div class="bp-time-rail bp-gantt" style="--bp-now-left:0px;--bp-gantt-label-width:0px;--bp-gantt-rows:${Math.max(1, timedEvents.length)};" data-date="${dateKey}" data-today="${selectedIsToday ? "true" : "false"}" data-standby="${standby ? "true" : "false"}" data-window-start="${window.start}" data-window-end="${window.end}">
+            <div class="bp-time-rail-hours" aria-hidden="true">${renderGanttHourMarks(window)}</div>
+            <div class="bp-gantt-track">
+              <span class="bp-time-now" title="Current time"></span>
+              ${rows || `<div class="bp-gantt-empty">${standby ? "Day not started" : "Timed items appear here. Untimed items stay in the day list."}</div>`}
+              ${standby ? `<div class="bp-gantt-standby-overlay" aria-hidden="true">Day not started</div>` : ""}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function getGanttGeometry(rail) {
+      const track = rail?.querySelector?.('.bp-gantt-track');
+      if (!track) return null;
+      const trackWidth = track.clientWidth;
+      if (!trackWidth) return null;
+      const firstLabel = track.querySelector('.bp-gantt-row-label');
+      let labelWidth = 0;
+      if (firstLabel) {
+        const trackRect = track.getBoundingClientRect();
+        const labelRect = firstLabel.getBoundingClientRect();
+        labelWidth = Math.max(0, labelRect.right - trackRect.left + 6);
+      } else {
+        labelWidth = Number.parseFloat(getComputedStyle(track).paddingLeft) || 0;
+      }
+      labelWidth = Math.max(0, Math.min(trackWidth * 0.65, labelWidth));
+      const gutterRight = 4;
+      const trackLeft = labelWidth;
+      const trackRight = Math.max(trackLeft, trackWidth - gutterRight);
+      const usableWidth = Math.max(0, trackRight - trackLeft);
+      return { track, trackWidth, labelWidth, trackLeft, trackRight, usableWidth };
+    }
+
+    function minutesToGanttX(minutes, geometry, windowStart = 0, windowEnd = 1440) {
+      const span = Math.max(1, windowEnd - windowStart);
+      const clamped = Math.max(windowStart, Math.min(windowEnd, Number(minutes) || windowStart));
+      return geometry.trackLeft + (((clamped - windowStart) / span) * geometry.usableWidth);
+    }
+
+    function updateSingleGanttRail(rail) {
+      const dateKey = rail.dataset.date;
+      if (!dateKey) return;
+
+      const geometry = getGanttGeometry(rail);
+      if (!geometry) return;
+      rail.style.setProperty('--bp-gantt-label-width', `${geometry.labelWidth.toFixed(1)}px`);
+
+      const windowStart = Number(rail.dataset.windowStart) || 0;
+      const windowEnd = Number(rail.dataset.windowEnd) || 1440;
+      const selectedIsToday = rail.dataset.today === 'true';
+      const nowMinute = nowMinutesOfDay();
+      const nowLeft = minutesToGanttX(nowMinute, geometry, windowStart, windowEnd);
+      rail.style.setProperty('--bp-now-left', `${nowLeft.toFixed(1)}px`);
+      rail.dataset.nowVisible = selectedIsToday && nowMinute >= windowStart && nowMinute <= windowEnd ? 'true' : 'false';
+
+      rail.querySelectorAll('.bp-gantt-hour-mark').forEach(mark => {
+        const minute = Number(mark.dataset.minute);
+        if (!Number.isFinite(minute)) return;
+        mark.style.left = `${minutesToGanttX(minute, geometry, windowStart, windowEnd).toFixed(1)}px`;
+      });
+
+      geometry.track.querySelectorAll('.bp-gantt-row').forEach(row => {
+        const start = Number(row.dataset.start);
+        const end = Number(row.dataset.end);
+        const bar = row.querySelector('.bp-gantt-bar');
+        if (!bar || !Number.isFinite(start) || !Number.isFinite(end)) return;
+        const startX = minutesToGanttX(start, geometry, windowStart, windowEnd);
+        const endX = minutesToGanttX(end, geometry, windowStart, windowEnd);
+        const left = Math.max(geometry.trackLeft, Math.min(geometry.trackRight, startX));
+        const rawWidth = Math.max(0, Math.min(geometry.trackRight, endX) - left);
+        const width = Math.max(42, rawWidth);
+        bar.style.setProperty('--event-left', `${left.toFixed(1)}px`);
+        bar.style.setProperty('--event-width', `${Math.min(width, Math.max(42, geometry.trackRight - left)).toFixed(1)}px`);
+      });
+    }
+
+    function updateCalendarTimeRail() {
+      const rails = document.querySelectorAll('.bp-time-rail.bp-gantt');
+      if (!rails.length) return;
+      requestAnimationFrame(() => {
+        rails.forEach(updateSingleGanttRail);
       });
     }
 
@@ -461,6 +1452,7 @@
       const weekdaysBase = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weekdays = [...weekdaysBase.slice(BP_USER_CONFIG.calendar.weekStartsOn), ...weekdaysBase.slice(0, BP_USER_CONFIG.calendar.weekStartsOn)];
       const cells = getDaysForMonth(appState.calendar.currentMonth);
+      const monthStats = getCalendarMonthStats(appState.calendar.currentMonth);
 
       return `
         <section class="bp-panel">
@@ -469,10 +1461,15 @@
               <div class="bp-calendar-toolbar">
                 <h2 style="margin:0;">Calendar</h2>
                 <div class="bp-calendar-month-title">${monthTitle}</div>
+                <div class="bp-calendar-stats" aria-label="Month summary">
+                  <span title="Recorded arrivals">✓ ${monthStats.onTime}</span>
+                  <span title="Late arrivals">⚠ ${monthStats.late}</span>
+                  <span title="Events this month">▦ ${monthStats.events}</span>
+                </div>
                 <div class="bp-calendar-nav">
-                  <button data-calendar-action="prev">◀</button>
+                  <button data-calendar-action="prev" title="Previous month">◀</button>
                   <button data-calendar-action="today">Today</button>
-                  <button data-calendar-action="next">▶</button>
+                  <button data-calendar-action="next" title="Next month">▶</button>
                 </div>
               </div>
               <div class="bp-calendar-weekdays">
@@ -505,16 +1502,76 @@
         : arrivalStatus === "on-time"
           ? `<span class="bp-pill bp-pill-ok" title="On-time arrival">✓</span>`
           : "";
-      const eventIcon = priority === "highest" ? "⛔" : priority === "high" ? "◆" : "▦";
+      const counts = getPriorityCounts(events);
+      const countTitle = events.length
+        ? `${events.length} event${events.length === 1 ? "" : "s"}: ${counts.highest} highest, ${counts.high} high, ${counts.normal} normal`
+        : "No events";
       const eventPill = events.length
-        ? `<span class="bp-pill ${priority === "highest" ? "bp-pill-highest" : priority === "high" ? "bp-pill-high" : ""}" title="${events.length} event${events.length === 1 ? "" : "s"}">${eventIcon}${events.length}</span>`
+        ? `<span class="bp-day-count" title="${escapeHTML(countTitle)}" aria-label="${escapeHTML(countTitle)}">▦ ${events.length}</span>`
+        : "";
+      const priorityMix = events.length
+        ? `<span class="bp-day-priority-mix" aria-hidden="true">${counts.highest ? `<i class="bp-mix-highest"></i>` : ""}${counts.high ? `<i class="bp-mix-high"></i>` : ""}${counts.normal ? `<i class="bp-mix-normal"></i>` : ""}</span>`
         : "";
       return `
         <button type="button" class="${classes.join(" ")}" data-date="${dateKey}" aria-label="Open ${dateLabel(dateKey)}">
-          <div class="bp-day-number">${date.getDate()}</div>
-          <div class="bp-muted"></div>
-          <div class="bp-day-meta">${arrivalPill}${eventPill}</div>
+          ${renderDayEventBand(events)}
+          <div class="bp-day-topline">
+            <span class="bp-day-number">${date.getDate()}</span>
+            <span class="bp-day-meta">${arrivalPill}${eventPill}${priorityMix}</span>
+          </div>
+          <div class="bp-day-events">${renderDayEventPreview(events)}</div>
         </button>
+      `;
+    }
+
+
+    function renderCalendarTools(dateKey) {
+      const diagnostics = getCalendarDiagnostics(appState.calendar);
+      const stats = diagnostics.stats;
+      const issueCount = diagnostics.issues.length;
+      const repeatGroups = getRepeatGroupSummaries(appState.calendar.currentMonth);
+      const sampleIssues = diagnostics.issues.slice(0, 5);
+      return `
+        <details class="bp-calendar-tools" ${appState.ui.calendarToolsOpen ? "open" : ""}>
+          <summary>Calendar release tools <span class="bp-pill">${issueCount ? `${issueCount} issue${issueCount === 1 ? "" : "s"}` : "Ready"}</span></summary>
+          <div class="bp-calendar-tools-grid">
+            <section class="bp-calendar-tool-card">
+              <h4>Backup</h4>
+              <div class="bp-calendar-tool-actions">
+                <button type="button" data-calendar-tool-action="export-calendar">⤴ Calendar</button>
+                <button type="button" data-calendar-tool-action="import-calendar">⤵ Calendar</button>
+                <input id="bpCalendarImportFile" class="bp-hidden" type="file" accept="application/json,.json" />
+              </div>
+              <p>Calendar-only import replaces Calendar data and leaves other Backpack tabs untouched.</p>
+            </section>
+            <section class="bp-calendar-tool-card">
+              <h4>Maintenance</h4>
+              <div class="bp-calendar-tool-actions">
+                <button type="button" data-calendar-tool-action="repair-calendar">Repair</button>
+                <button type="button" data-calendar-tool-action="clean-empty-days">Clean empty days</button>
+                <button type="button" class="bp-danger" data-calendar-tool-action="clear-selected-day">Clear selected day</button>
+              </div>
+              <p>${stats.events} events · ${stats.timedEvents} timed · ${stats.untimedEvents} untimed · ${stats.arrivals} arrivals</p>
+            </section>
+            <section class="bp-calendar-tool-card">
+              <h4>Diagnostics</h4>
+              ${sampleIssues.length ? `
+                <ul class="bp-calendar-issue-list">
+                  ${sampleIssues.map(issue => `<li><strong>${escapeHTML(issue.level)}</strong> · ${escapeHTML(issue.message)}</li>`).join("")}
+                </ul>
+                ${issueCount > sampleIssues.length ? `<p>${issueCount - sampleIssues.length} more issue${issueCount - sampleIssues.length === 1 ? "" : "s"} hidden.</p>` : ""}
+              ` : `<p>No calendar maintenance issues detected.</p>`}
+            </section>
+            <section class="bp-calendar-tool-card">
+              <h4>Repeat groups this month</h4>
+              ${repeatGroups.length ? `
+                <div class="bp-repeat-group-list">
+                  ${repeatGroups.map(group => `<div><span class="bp-pill">↻ ${group.count}</span> ${escapeHTML(group.time ? `${group.time} · ` : "")}${escapeHTML(group.title)}</div>`).join("")}
+                </div>
+              ` : `<p>No repeated groups in this month.</p>`}
+            </section>
+          </div>
+        </details>
       `;
     }
 
@@ -524,61 +1581,83 @@
       const expected = getExpectedArrival(dateKey);
       const status = getArrivalStatus(dateKey);
       const events = sortedEvents(appState.calendar.events[dateKey] || []);
-      const priorityColumns = [
-        { id: "highest", label: "Highest", icon: "⛔" },
-        { id: "high", label: "High", icon: "◆" },
-        { id: "normal", label: "Normal", icon: "◇" }
-      ].filter(column => events.length === 0 ? column.id === "normal" : events.some(event => event.priority === column.id));
+      const draft = getCalendarDraftEvent();
+      const repeatPreviewCount = draft.repeatDays.length ? datesForRepeatInCurrentMonth(dateKey, draft.repeatDays).length : 1;
+      const priorityColumns = PRIORITY_ORDER.map(id => ({ id, label: priorityLabel(id), icon: prioritySymbol(id) }))
+        .filter(column => events.length === 0 ? column.id === "normal" : events.some(event => normalizePriority(event.priority) === column.id));
+      const statusBadge = status === "late"
+        ? `<span class="bp-pill bp-pill-late" title="Late arrival">⚠ Late</span>`
+        : status === "on-time"
+          ? `<span class="bp-pill bp-pill-ok" title="On-time arrival">✓ On time</span>`
+          : `<span class="bp-pill">No arrival</span>`;
 
       return `
-        <aside class="bp-card">
-          <h3>${dateLabel(dateKey)}</h3>
-          <div class="bp-arrival-line">
-            <label for="bpArrivalTime">Arrival <strong>${expected}</strong></label>
-            <input id="bpArrivalTime" type="time" value="${escapeHTML(arrival)}" />
-            ${status === "late" ? `<span class="bp-pill bp-pill-late" title="Late arrival">⚠ Late</span>` : ""}
-            ${status === "on-time" ? `<span class="bp-pill bp-pill-ok" title="On-time arrival">✓ On time</span>` : ""}
-            ${status === "none" ? `<span class="bp-pill">—</span>` : ""}
-            ${arrival ? `<button type="button" data-calendar-action="clear-arrival" title="Clear arrival">×</button>` : ""}
+        <aside class="bp-card bp-day-detail ${!arrival && dateKey === getBackpackTodayKey() ? "bp-day-detail-standby" : "bp-day-detail-active"}">
+          <div class="bp-day-detail-head">
+            <h3>${dateLabel(dateKey)}</h3>
+            <div class="bp-day-detail-summary">
+              <span class="bp-pill">Expected ${expected}</span>
+              ${statusBadge}
+              <span class="bp-pill">▦ ${events.length}</span>
+            </div>
           </div>
 
-          <details class="bp-card" style="margin-bottom: .75rem;">
-            <summary style="font-weight:900; cursor:pointer;">＋ New Event</summary>
-            <div style="margin-top:.75rem;">
-              <div class="bp-field">
-                <label for="bpEventTitle">Title. Prefix with time to sort, for example: 07:30 - Appointment</label>
-                <input id="bpEventTitle" placeholder="07:30 - Appointment with Dev" />
-              </div>
-              <div class="bp-row" style="align-items:end;">
-                <div class="bp-field" style="min-width: 180px; margin-bottom:0;">
+          <div class="bp-day-flow">
+            ${renderArrivalControl(dateKey, arrival, expected, status, statusBadge)}
+
+            <details class="bp-card bp-new-event-card" ${appState.ui.calendarNewEventOpen ? "open" : ""}>
+              <summary>＋ New Event</summary>
+              <div class="bp-new-event-grid">
+                <div class="bp-field bp-event-title-field">
+                  <label for="bpEventTitle">Title. Optional time at start: HH:MM - HH:MM, or HH:MM.</label>
+                  <input id="bpEventTitle" value="${escapeHTML(draft.titleInput)}" placeholder="09:00 - 10:30 Review, or 09:00 Review" />
+                </div>
+                <div class="bp-field">
                   <label for="bpEventPriority">Priority</label>
                   <select id="bpEventPriority">
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="highest">Highest</option>
+                    ${renderPriorityOptions(draft.priority)}
                   </select>
                 </div>
-                <button type="button" data-calendar-action="add-event">Add Event</button>
+                <button type="button" data-calendar-action="add-event">Add</button>
+                <details class="bp-event-notes-details">
+                  <summary>Notes</summary>
+                  <textarea id="bpEventNotes" placeholder="Optional details">${escapeHTML(draft.notes)}</textarea>
+                </details>
+                <details class="bp-event-repeat-details">
+                  <summary>Repeat this month</summary>
+                  <div class="bp-repeat-tools">
+                    <button type="button" data-repeat-preset="weekdays">Weekdays</button>
+                    <button type="button" data-repeat-preset="everyday">Every day</button>
+                    <button type="button" data-repeat-preset="clear">Clear</button>
+                  </div>
+                  <div class="bp-repeat-days" aria-label="Repeat on days">
+                    ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label, index) => `
+                      <label><input type="checkbox" value="${(index + 1) % 7}" data-repeat-day ${draft.repeatDays.includes((index + 1) % 7) ? "checked" : ""} /> ${label}</label>
+                    `).join("")}
+                  </div>
+                  <div class="bp-repeat-preview" data-repeat-preview>${draft.repeatDays.length ? `Creates ${repeatPreviewCount} event${repeatPreviewCount === 1 ? "" : "s"} this month` : "No repeat selected"}</div>
+                </details>
               </div>
-              <details style="margin-top:.7rem;">
-                <summary>Optional notes</summary>
-                <div class="bp-field" style="margin-top:.6rem;">
-                  <label for="bpEventNotes">Notes</label>
-                  <textarea id="bpEventNotes" placeholder="Optional details"></textarea>
-                </div>
-              </details>
-            </div>
-          </details>
+            </details>
+          </div>
 
-          <h4>${events.length >= 2 ? "Events as sorted stacked kanban blocks" : "Events"}</h4>
+          ${isWidgetPromoted('calendarGantt') ? renderPromotedInlineNotice('calendarGantt') : renderEventTimeRail(dateKey, events)}
+          ${renderUntimedEventsCompact(events)}
+
+          <div class="bp-events-head">
+            <h4>${events.length >= 2 ? "Schedule" : "Events"}</h4>
+            <span class="bp-pill">${events.length} total</span>
+          </div>
           <div class="bp-event-kanban">
             ${priorityColumns.map(column => `
               <div class="bp-event-column">
-                <h4><span>${column.icon} ${column.label}</span><span>${events.filter(event => event.priority === column.id).length || ""}</span></h4>
-                ${events.filter(event => event.priority === column.id).map(renderEventBlock).join("") || `<p class="bp-muted">No ${column.label.toLowerCase()} events.</p>`}
+                <h4><span>${column.icon} ${column.label}</span><span>${events.filter(event => normalizePriority(event.priority) === column.id).length || ""}</span></h4>
+                ${events.filter(event => normalizePriority(event.priority) === column.id).map(renderEventBlock).join("") || `<p class="bp-muted">No ${column.label.toLowerCase()} events.</p>`}
               </div>
             `).join("")}
           </div>
+
+          ${renderCalendarTools(dateKey)}
         </aside>
       `;
     }
@@ -587,39 +1666,52 @@
       const editing = appState.ui.editingEventId === event.id;
       if (editing) {
         return `
-          <div class="bp-event-block" data-priority="${event.priority}">
-            <div class="bp-field"><label>Title</label><input data-edit-field="title" data-event-id="${event.id}" value="${escapeHTML(event.title)}"></div>
-            <div class="bp-field"><label>Priority</label>
-              <select data-edit-field="priority" data-event-id="${event.id}">
-                ${["highest", "high", "normal"].map(priority => `<option value="${priority}" ${priority === event.priority ? "selected" : ""}>${priority}</option>`).join("")}
-              </select>
-            </div>
-            <div class="bp-field"><label>Notes</label><textarea data-edit-field="notes" data-event-id="${event.id}">${escapeHTML(event.notes || "")}</textarea></div>
-            <div class="bp-row">
-              <button type="button" data-event-action="save" data-event-id="${event.id}">Save</button>
-              <button type="button" data-event-action="cancel" data-event-id="${event.id}">Cancel</button>
+          <div class="bp-event-block bp-event-editing" data-priority="${normalizePriority(event.priority)}">
+            <div class="bp-new-event-grid">
+              <div class="bp-field bp-event-title-field"><label>Title</label><input data-edit-field="title" data-event-id="${event.id}" value="${escapeHTML(eventInputValue(event))}"></div>
+              <div class="bp-field"><label>Priority</label>
+                <select data-edit-field="priority" data-event-id="${event.id}">
+                  ${renderPriorityOptions(event.priority)}
+                </select>
+              </div>
+              <div class="bp-field bp-event-notes-edit"><label>Notes</label><textarea data-edit-field="notes" data-event-id="${event.id}">${escapeHTML(event.notes || "")}</textarea></div>
+              <div class="bp-event-actions">
+                <button type="button" data-event-action="save" data-event-id="${event.id}">Save</button>
+                <button type="button" data-event-action="cancel" data-event-id="${event.id}">Cancel</button>
+              </div>
             </div>
           </div>
         `;
       }
-      const time = normalizeTimePrefix(event.title);
+      const schedule = getEventSchedule(event);
+      const timeLabel = eventTimeLabel(schedule);
+      const timeClass = schedule && !schedule.hasRange ? " bp-time-default" : "";
+      const timeTitle = schedule ? eventDurationTitle(schedule) : "";
+      const repeatMeta = event.repeatId ? `<div class="bp-event-meta"><span class="bp-pill bp-repeat-pill" title="Repeated event group">${escapeHTML(repeatSummary(event))}</span></div>` : "";
       return `
-        <div class="bp-event-block" data-priority="${event.priority}">
-          <div class="bp-event-title">${time ? `<span class="bp-pill">${time}</span> ` : ""}${escapeHTML(event.title)}</div>
-          ${event.notes ? `<div class="bp-event-notes">${escapeHTML(event.notes)}</div>` : ""}
-          <div class="bp-row" style="margin-top: .65rem;">
-            <button type="button" data-event-action="edit" data-event-id="${event.id}">Edit</button>
-            <button type="button" class="bp-danger" data-event-action="delete" data-event-id="${event.id}">Delete</button>
+        <div class="bp-event-block" data-priority="${normalizePriority(event.priority)}">
+          <div class="bp-event-row">
+            <div class="bp-event-title">${timeLabel ? `<span class="bp-pill${timeClass}" title="${escapeHTML(timeTitle)}">${escapeHTML(timeLabel)}</span> ` : ""}<span>${escapeHTML(eventDisplayTitle(event))}</span></div>
+            <div class="bp-event-actions">
+              <button type="button" data-event-action="edit" data-event-id="${event.id}" title="Edit event">✎</button>
+              <button type="button" class="bp-danger" data-event-action="delete" data-event-id="${event.id}" title="Delete this event">×</button>
+              ${event.repeatId ? `<button type="button" class="bp-danger" data-event-action="delete-group" data-event-id="${event.id}" title="Delete repeated group">↻×</button>` : ""}
+            </div>
           </div>
+          ${repeatMeta}
+          ${event.notes ? `<div class="bp-event-notes">${escapeHTML(event.notes)}</div>` : ""}
         </div>
       `;
     }
 
     function bindCalendar() {
+      updateCalendarTimeRail();
       $$('[data-date]').forEach(button => {
         button.addEventListener('click', () => {
           appState.calendar.selectedDate = button.dataset.date;
           appState.ui.editingEventId = null;
+          appState.ui.calendarArrivalEditing = false;
+          setCalendarDraftArrivalTime('');
           renderApp();
         });
       });
@@ -628,26 +1720,156 @@
         button.addEventListener('click', () => handleCalendarAction(button.dataset.calendarAction));
       });
 
+      const newEventDetails = $('.bp-new-event-card');
+      newEventDetails?.addEventListener('toggle', () => {
+        appState.ui.calendarNewEventOpen = newEventDetails.open;
+        saveState();
+      });
+
+      const calendarTools = $('.bp-calendar-tools');
+      calendarTools?.addEventListener('toggle', () => {
+        appState.ui.calendarToolsOpen = calendarTools.open;
+        saveState();
+      });
+
+      $$('[data-calendar-tool-action]').forEach(button => {
+        button.addEventListener('click', () => handleCalendarToolAction(button.dataset.calendarToolAction));
+      });
+
+      $('#bpCalendarImportFile')?.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        if (file) importCalendarStateFile(file);
+        event.target.value = '';
+      });
+
+      $('#bpEventTitle')?.addEventListener('input', event => {
+        setCalendarDraftEvent({ titleInput: event.target.value });
+        saveState();
+      });
+      $('#bpEventPriority')?.addEventListener('change', event => {
+        setCalendarDraftEvent({ priority: event.target.value });
+        saveState();
+      });
+      $('#bpEventNotes')?.addEventListener('input', event => {
+        setCalendarDraftEvent({ notes: event.target.value });
+        saveState();
+      });
+      $$('[data-repeat-day]').forEach(input => {
+        input.addEventListener('change', () => {
+          setCalendarDraftEvent({ repeatDays: getSelectedRepeatDays() });
+          updateRepeatPreview();
+          saveState();
+        });
+      });
+
       const arrival = $('#bpArrivalTime');
       if (arrival) {
-        arrival.addEventListener('change', () => {
-          const dateKey = appState.calendar.selectedDate;
-          if (arrival.value) {
-            appState.calendar.arrivals[dateKey] = {
-              arrivalTime: arrival.value,
-              updatedAt: new Date().toISOString()
-            };
-          } else {
-            delete appState.calendar.arrivals[dateKey];
-          }
+        arrival.addEventListener('input', () => {
+          setCalendarDraftArrivalTime(arrival.value);
+          arrival.classList.remove('bp-time-invalid');
           saveState();
-          renderApp();
+        });
+        arrival.addEventListener('change', () => {
+          const normalized = parseLooseTimeInput(arrival.value);
+          arrival.classList.toggle('bp-time-invalid', Boolean(arrival.value.trim()) && !normalized);
+          setCalendarDraftArrivalTime(arrival.value);
+          saveState();
+        });
+        arrival.addEventListener('keydown', event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            const mode = arrival.dataset.arrivalMode;
+            if (mode === 'editing') handleCalendarAction('save-arrival-edit');
+            else handleCalendarAction('set-arrival-now');
+          }
         });
       }
+
+      $$('[data-arrival-step]').forEach(button => {
+        button.addEventListener('click', () => {
+          const dateKey = appState.calendar.selectedDate;
+          const input = $('#bpArrivalTime');
+          const current = parseLooseTimeInput(input?.value) || getArrivalRecord(dateKey)?.arrivalTime || parseLooseTimeInput(getCalendarDraftArrivalTime()) || getExpectedArrival(dateKey);
+          const next = offsetTimeString(current, Number(button.dataset.arrivalStep));
+          if (!next || !input) return;
+          input.value = next;
+          setCalendarDraftArrivalTime(next);
+          input.classList.remove('bp-time-invalid');
+          if (hasArrival(dateKey) && !appState.ui.calendarArrivalEditing) {
+            appState.calendar.arrivals[dateKey] = { arrivalTime: next, updatedAt: new Date().toISOString() };
+            setCalendarDraftArrivalTime('');
+            saveState();
+            renderApp();
+          } else {
+            saveState();
+          }
+        });
+      });
 
       $$('[data-event-action]').forEach(button => {
         button.addEventListener('click', () => handleEventAction(button.dataset.eventAction, button.dataset.eventId));
       });
+
+      $$('[data-repeat-preset]').forEach(button => {
+        button.addEventListener('click', () => {
+          const mode = button.dataset.repeatPreset;
+          const checks = $$('[data-repeat-day]');
+          checks.forEach(input => {
+            const day = Number(input.value);
+            input.checked = mode === 'everyday' || (mode === 'weekdays' && day >= 1 && day <= 5);
+            if (mode === 'clear') input.checked = false;
+          });
+          setCalendarDraftEvent({ repeatDays: getSelectedRepeatDays() });
+          updateRepeatPreview();
+          saveState();
+        });
+      });
+    }
+
+    function getSelectedRepeatDays() {
+      return $$('[data-repeat-day]:checked').map(input => Number(input.value));
+    }
+
+    function updateRepeatPreview() {
+      const target = $('[data-repeat-preview]');
+      if (!target) return;
+      const days = getSelectedRepeatDays();
+      if (!days.length) {
+        target.textContent = 'No repeat selected';
+        return;
+      }
+      const count = datesForRepeatInCurrentMonth(appState.calendar.selectedDate, days).length;
+      target.textContent = `Creates ${count} event${count === 1 ? '' : 's'} this month`;
+    }
+
+    function datesForRepeatInCurrentMonth(seedDateKey, repeatDays) {
+      const days = new Set(repeatDays);
+      if (!days.size) return [seedDateKey];
+      const monthKey = appState.calendar.currentMonth;
+      const [year, month] = monthKey.split('-').map(Number);
+      const last = new Date(year, month, 0).getDate();
+      const seedTime = fromDateKey(seedDateKey).getTime();
+      const keys = [];
+      for (let day = 1; day <= last; day += 1) {
+        const date = new Date(year, month - 1, day);
+        if (date.getTime() < seedTime) continue;
+        if (days.has(date.getDay())) keys.push(toDateKey(date));
+      }
+      return keys.length ? keys : [seedDateKey];
+    }
+
+
+    function handleCalendarToolAction(action) {
+      if (action === 'export-calendar') exportCalendarState();
+      if (action === 'import-calendar') $('#bpCalendarImportFile')?.click();
+      if (action === 'repair-calendar') repairCalendarState();
+      if (action === 'clean-empty-days') {
+        const removed = cleanEmptyCalendarDays(appState.calendar);
+        saveState();
+        renderApp();
+        showToast(`Cleaned ${removed} empty calendar day${removed === 1 ? '' : 's'}.`);
+      }
+      if (action === 'clear-selected-day') clearSelectedCalendarDay();
     }
 
     function handleCalendarAction(action) {
@@ -663,23 +1885,94 @@
       }
       if (action === 'clear-arrival') {
         delete appState.calendar.arrivals[appState.calendar.selectedDate];
+        setCalendarDraftArrivalTime('');
+        appState.ui.calendarArrivalEditing = false;
+      }
+      if (action === 'edit-arrival') {
+        const dateKey = appState.calendar.selectedDate;
+        setCalendarDraftArrivalTime(appState.calendar.arrivals[dateKey]?.arrivalTime || getExpectedArrival(dateKey));
+        appState.ui.calendarArrivalEditing = true;
+      }
+      if (action === 'cancel-arrival-edit') {
+        setCalendarDraftArrivalTime('');
+        appState.ui.calendarArrivalEditing = false;
+      }
+      if (action === 'save-arrival-edit') {
+        const input = $('#bpArrivalTime');
+        const ok = commitArrivalInput(appState.calendar.selectedDate, input?.value || getCalendarDraftArrivalTime(), { render: false, allowClear: false });
+        if (!ok) {
+          input?.classList.add('bp-time-invalid');
+          return;
+        }
+        appState.ui.calendarArrivalEditing = false;
+      }
+      if (action === 'draft-arrival-expected') {
+        const expected = getExpectedArrival(appState.calendar.selectedDate);
+        setCalendarDraftArrivalTime(expected);
+        const input = $('#bpArrivalTime');
+        if (input) {
+          input.value = expected;
+          input.classList.remove('bp-time-invalid');
+          input.focus();
+        }
+        saveState();
+        return;
+      }
+      if (action === 'set-arrival-expected') {
+        const dateKey = appState.calendar.selectedDate;
+        const expectedValue = getExpectedArrival(dateKey);
+        if (appState.ui.calendarArrivalEditing) {
+          setCalendarDraftArrivalTime(expectedValue);
+          const input = $('#bpArrivalTime');
+          if (input) {
+            input.value = expectedValue;
+            input.classList.remove('bp-time-invalid');
+            input.focus();
+          }
+          saveState();
+          return;
+        }
+        appState.calendar.arrivals[dateKey] = {
+          arrivalTime: expectedValue,
+          updatedAt: new Date().toISOString()
+        };
+        setCalendarDraftArrivalTime('');
+      }
+      if (action === 'set-arrival-now') {
+        const now = new Date();
+        const typed = parseLooseTimeInput($('#bpArrivalTime')?.value);
+        appState.calendar.arrivals[appState.calendar.selectedDate] = {
+          arrivalTime: typed || `${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+          updatedAt: new Date().toISOString()
+        };
+        setCalendarDraftArrivalTime('');
+        appState.ui.calendarArrivalEditing = false;
       }
       if (action === 'add-event') {
-        const title = $('#bpEventTitle').value.trim();
-        const priority = $('#bpEventPriority').value;
-        const notes = $('#bpEventNotes').value.trim();
+        const draft = getCalendarDraftEvent();
+        const title = ($('#bpEventTitle')?.value ?? draft.titleInput).trim();
+        const priority = $('#bpEventPriority')?.value ?? draft.priority;
+        const notes = ($('#bpEventNotes')?.value ?? draft.notes).trim();
         if (!title) return showToast('Event title is required.');
         const dateKey = appState.calendar.selectedDate;
-        appState.calendar.events[dateKey] ||= [];
-        appState.calendar.events[dateKey].push({
-          id: uid('evt'),
-          title,
-          priority,
-          notes,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-        showToast('Event added.');
+        const repeatDays = getSelectedRepeatDays();
+        const targetDates = datesForRepeatInCurrentMonth(dateKey, repeatDays);
+        const repeatId = repeatDays.length ? uid('rep') : null;
+        for (const targetDate of targetDates) {
+          appState.calendar.events[targetDate] ||= [];
+          appState.calendar.events[targetDate].push(createCalendarEvent({
+            titleInput: title,
+            priority,
+            notes,
+            repeatId,
+            repeatDays,
+            repeatSourceDate: repeatId ? dateKey : null,
+            repeatGenerated: Boolean(repeatId)
+          }));
+        }
+        showToast(repeatDays.length ? `Repeat this month: ${targetDates.length} event${targetDates.length === 1 ? '' : 's'} added.` : 'Event added.');
+        resetCalendarDraftEvent();
+        appState.ui.calendarNewEventOpen = false;
       }
       appState.ui.editingEventId = null;
       saveState();
@@ -694,15 +1987,35 @@
       if (action === 'edit') appState.ui.editingEventId = eventId;
       if (action === 'cancel') appState.ui.editingEventId = null;
       if (action === 'delete') {
-        if (!confirm('Delete this event?')) return;
+        if (!confirm(event.repeatId ? 'Delete only this repeated event?' : 'Delete this event?')) return;
         appState.calendar.events[dateKey] = events.filter(item => item.id !== eventId);
         appState.ui.editingEventId = null;
       }
+      if (action === 'delete-group') {
+        if (!event.repeatId) return;
+        const group = getRepeatGroupEvents(event.repeatId);
+        if (!group.length) return;
+        if (!confirm(`Delete all ${group.length} events in this repeated group?`)) return;
+        for (const { dateKey: groupDateKey } of group) {
+          appState.calendar.events[groupDateKey] = (appState.calendar.events[groupDateKey] || []).filter(item => item.repeatId !== event.repeatId);
+          if (!appState.calendar.events[groupDateKey].length) delete appState.calendar.events[groupDateKey];
+        }
+        appState.ui.editingEventId = null;
+        showToast(`Deleted ${group.length} repeated events.`);
+      }
       if (action === 'save') {
-        event.title = $(`[data-edit-field="title"][data-event-id="${eventId}"]`).value.trim() || event.title;
-        event.priority = $(`[data-edit-field="priority"][data-event-id="${eventId}"]`).value;
-        event.notes = $(`[data-edit-field="notes"][data-event-id="${eventId}"]`).value.trim();
-        event.updatedAt = new Date().toISOString();
+        const titleInput = $(`[data-edit-field="title"][data-event-id="${eventId}"]`).value.trim() || eventInputValue(event);
+        const draft = eventDraftFromInput(titleInput);
+        Object.assign(event, normalizeEvent({
+          ...event,
+          title: draft.title,
+          startTime: draft.startTime,
+          endTime: draft.endTime,
+          durationMode: draft.durationMode,
+          priority: $(`[data-edit-field="priority"][data-event-id="${eventId}"]`).value,
+          notes: $(`[data-edit-field="notes"][data-event-id="${eventId}"]`).value.trim(),
+          updatedAt: new Date().toISOString()
+        }));
         appState.ui.editingEventId = null;
       }
       saveState();
@@ -711,7 +2024,7 @@
 
     /***************************************************************************
      * Shared content source registry
-     * A custom page should mostly register files here, then reuse fetch/upload/render helpers.
+     * A custom page should mostly register files here, then reuse upload/demo/render helpers.
      ***************************************************************************/
     function getStatePath(path) {
       return path.reduce((cursor, key) => cursor?.[key], appState);
@@ -729,49 +2042,32 @@
     function getContentSourceConfig(sourceId) {
       const sources = {
         notesMain: {
-          label: 'notes.md',
+          label: BP_USER_CONFIG.contentLabels.notes,
           type: 'markdown',
-          path: BP_USER_CONFIG.notesFile,
           statePath: ['notes', 'markdown'],
           sourcePath: ['notes', 'source'],
           fallback: ''
-        },
-        wikiBeeDescription: {
-          label: 'Bee_Description.md',
-          type: 'markdown',
-          path: BP_USER_CONFIG.wikiBeeDescriptionFile,
-          statePath: ['wikiBees', 'description', 'markdown'],
-          sourcePath: ['wikiBees', 'description', 'source'],
-          fallback: typeof wikiBeeDescriptionFallback !== 'undefined' ? wikiBeeDescriptionFallback : ''
-        },
-        wikiBeeFamilies: {
-          label: 'Bee_Families.md',
-          type: 'markdown',
-          path: BP_USER_CONFIG.wikiBeeFamiliesFile,
-          statePath: ['wikiBees', 'families', 'markdown'],
-          sourcePath: ['wikiBees', 'families', 'source'],
-          fallback: typeof wikiBeeFamiliesFallback !== 'undefined' ? wikiBeeFamiliesFallback : ''
         }
       };
       return sources[sourceId];
     }
 
-    async function loadContentSource(sourceId, { rerenderTab = null } = {}) {
+    function useContentSourceFallback(sourceId, { rerenderTab = null, force = false } = {}) {
       const config = getContentSourceConfig(sourceId);
       if (!config) return;
-      try {
-        const response = await fetch(config.path, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        setStatePath(config.statePath, await response.text());
-        setStatePath(config.sourcePath, `Fetched ${config.label}`);
-      } catch (error) {
-        if (!getStatePath(config.statePath)) {
-          setStatePath(config.statePath, config.fallback || '');
-          setStatePath(config.sourcePath, config.fallback ? `Fallback ${config.label}; upload to replace` : 'Upload required');
-        }
+      if (!config.fallback) {
+        setStatePath(config.sourcePath, 'Upload required');
+        showToast(`${config.label} must be uploaded.`);
+      } else if (force || !getStatePath(config.statePath)) {
+        setStatePath(config.statePath, config.fallback);
+        setStatePath(config.sourcePath, `Bundled demo ${config.label}; upload to replace`);
       }
       saveState();
       if (rerenderTab && appState.activeTab === rerenderTab) renderApp();
+    }
+
+    async function loadContentSource(sourceId, options = {}) {
+      useContentSourceFallback(sourceId, options);
     }
 
     async function uploadContentSource(sourceId, file, { rerender = true } = {}) {
@@ -800,7 +2096,8 @@
      * Notes module
      ***************************************************************************/
     async function loadExternalNotes() {
-      await loadContentSource('notesMain', { rerenderTab: 'notes' });
+      appState.notes.source ||= 'Upload required';
+      saveState();
     }
 
     function renderNotes() {
@@ -810,11 +2107,10 @@
           <div class="bp-panel-header">
             <div>
               <h2>Notes</h2>
-              <p>Backpack first tries to fetch <code>${BP_USER_CONFIG.notesFile}</code>. If that fails, upload a Markdown file. Raw HTML is escaped.</p>
+              <p>Upload a Markdown file to use as the main Notes document. Raw HTML is escaped; no server or file-check step is required.</p>
             </div>
             <div class="bp-row">
               <span class="bp-pill">Source: ${escapeHTML(appState.notes.source)}</span>
-              <button type="button" id="bpReloadNotes">Fetch notes.md</button>
             </div>
           </div>
 
@@ -827,7 +2123,7 @@
               </div>
               <div class="bp-window-body bp-markdown">
                 <h1>Upload notes.md</h1>
-                <p>The browser could not fetch the notes file next to this HTML document. Upload the Markdown file manually to use it in this session and cache it locally.</p>
+                <p>Upload a Markdown file manually to use it in this session and cache it locally. This build intentionally does not check neighboring files.</p>
                 <p>This window follows the Mac OS 8 reference: a readable document area should be the main space, not a tiny side panel.</p>
               </div>
               <div class="bp-window-footer">
@@ -855,12 +2151,6 @@
     }
 
     function bindNotes() {
-      $('#bpReloadNotes')?.addEventListener('click', () => {
-        appState.notes.source = 'Trying fetch...';
-        saveState();
-        renderApp();
-        loadExternalNotes();
-      });
       $('#bpNotesFile')?.addEventListener('change', async event => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -878,10 +2168,10 @@
      ***************************************************************************/
     const codeBlocks = [
       {
-        title: 'Start Backpack server',
+        title: 'Open Backpack entry file',
         category: 'Paths',
-        description: 'Uses PROJECT_PATH and SERVER_PORT so the same command follows your workspace.',
-        code: 'cd "{{PROJECT_PATH}}"\npython -m http.server {{SERVER_PORT}}'
+        description: 'Open the split build directly. Content documents are loaded with upload controls instead of a local server.',
+        code: 'start "" "{{HTML_ENTRY}}"'
       },
       {
         title: 'Open project root',
@@ -896,33 +2186,27 @@
         code: 'code "{{HTML_ENTRY}}" "{{CSS_PATH}}" "{{JS_PATH}}"'
       },
       {
-        title: 'List Backpack content files',
+        title: 'Prepare upload content files',
         category: 'Content',
-        description: 'Check the Markdown and HTML content files used by the Notes and Bees tabs.',
-        code: 'cd "{{PROJECT_PATH}}"\nls -la "{{CONTENT_PATH}}"\nls -la "{{NOTES_FILE}}" "{{BASIC_MD}}" "{{BASIC_HTML}}"'
-      },
-      {
-        title: 'Create content folder scaffold',
-        category: 'Content',
-        description: 'Create the expected content directory and starter files when setting up a new Backpack copy.',
-        code: 'mkdir -p "{{CONTENT_PATH}}"\ntouch "{{NOTES_FILE}}" "{{BASIC_MD}}" "{{BASIC_HTML}}"'
+        description: 'Optional helper for authoring Markdown/HTML files before uploading them into Backpack.',
+        code: 'mkdir -p "{{CONTENT_PATH}}"\n# Author files here, then upload them through the relevant tab:\n# {{NOTES_FILE}}\n# {{BASIC_MD}}\n# {{BASIC_HTML}}'
       },
 
       {
-        title: 'Open Wiki Bees files',
-        category: 'Wiki Bees',
-        description: 'Open the two Markdown files that drive the Wiki Bees middle content column.',
+        title: 'Open Template - Medium source files',
+        category: 'Template - Medium',
+        description: 'Open the two Markdown files that can be uploaded into the Template - Medium content column.',
         code: 'code "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"'
       },
       {
-        title: 'Create Wiki Bees scaffold',
-        category: 'Wiki Bees',
-        description: 'Create local folders and placeholder files for the Wiki Bees tab, including image assets.',
+        title: 'Create Template - Medium scaffold',
+        category: 'Template - Medium',
+        description: 'Create optional source files before uploading them through Template - Medium.',
         code: `mkdir -p "{{WIKI_BEE_IMAGES}}"
-touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
-# Add image files such as:
-# {{WIKI_BEE_WORKER_IMAGE}}
-# {{WIKI_BEE_HIVE_IMAGE}}`
+\ttouch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
+\t# Prepare image files, then upload them in Template - Medium:
+\t# {{WIKI_BEE_WORKER_IMAGE}}
+\t# {{WIKI_BEE_HIVE_IMAGE}}`
       },
       {
         title: 'Create dated state backup path',
@@ -1053,6 +2337,8 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
         ...spot,
         z: appState.quickNotes.nextZ,
         color: quickNoteColors[0],
+        textColor: '#151515',
+        title: 'Note',
         text: 'New note',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -1065,9 +2351,14 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
       const cfg = BP_USER_CONFIG.quickNotes;
       return `
         <section class="bp-panel">
-          <div class="bp-panel-header">
+          <div class="bp-panel-header bp-qn-header">
             <div>
               <h2>Quick Notes</h2>
+            </div>
+            <div class="bp-qn-actions" aria-label="Quick Notes board actions">
+              <button type="button" id="bpExportQuickNotes" title="Export only the Quick Notes board">Export Board</button>
+              <button type="button" id="bpImportQuickNotesBtn" title="Import a Quick Notes board JSON file">Import Board</button>
+              <input id="bpQuickNotesImportFile" class="bp-hidden" type="file" accept="application/json,.json" />
             </div>
           </div>
           <div class="bp-qn-shell">
@@ -1080,7 +2371,11 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
               <span>•</span>
               <span>${cfg.cell}px base</span>
               <span>•</span>
-              <span>Move: header</span>
+              <span>Move: bottom chrome</span>
+              <span>•</span>
+              <span>Title: header text</span>
+              <span>•</span>
+              <span>Text color: T</span>
               <span>•</span>
               <span>Edit: body</span>
               <span>•</span>
@@ -1101,24 +2396,122 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
       const top = (note.row / cfg.rows) * 100;
       const width = (note.w / cfg.columns) * 100;
       const height = (note.h / cfg.rows) * 100;
+      const titleIndentCells = Math.max(0, Number(BP_USER_CONFIG.quickNotes.maxOverlapCells || 0));
+      const titleIndent = titleIndentCells ? `calc((100% / ${Math.max(1, Number(note.w || cfg.defaultW))}) * ${titleIndentCells})` : '0px';
       return `
-        <article class="bp-qn-note" data-note-id="${note.id}" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%;z-index:${note.z};background:${escapeHTML(note.color)};">
-          <div class="bp-qn-note-header" data-qn-drag="${note.id}">
-            <strong>Note</strong>
+        <article class="bp-qn-note" data-note-id="${note.id}" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%;z-index:${note.z};background:${escapeHTML(note.color)};color:${escapeHTML(note.textColor || '#151515')};--bp-qn-title-indent:${titleIndent};">
+          <div class="bp-qn-note-header">
+            <input class="bp-qn-title" data-qn-title="${note.id}" value="${escapeHTML(note.title || 'Note')}" aria-label="Quick note title" title="Edit note title" />
           </div>
           <div class="bp-qn-note-body" contenteditable="true" spellcheck="true" data-qn-body="${note.id}">${escapeHTML(note.text)}</div>
           <div class="bp-qn-note-footer">
-            <input type="color" data-qn-color="${note.id}" value="${escapeHTML(note.color)}" aria-label="Note color" />
-            <span></span>
-            <span class="bp-qn-resize" data-qn-resize="${note.id}" aria-label="Resize note">↘</span>
+            <label class="bp-qn-color-field" title="Note background color">
+              <input type="color" data-qn-color="${note.id}" value="${escapeHTML(note.color)}" aria-label="Note background color" />
+            </label>
+            <label class="bp-qn-color-field" title="Note text color">
+              <input type="color" data-qn-text-color="${note.id}" value="${escapeHTML(note.textColor || '#151515')}" aria-label="Note text color" />
+            </label>
+            <span class="bp-qn-drag-zone" data-qn-drag="${note.id}" title="Drag note from empty bottom chrome" aria-label="Drag note from empty bottom chrome"></span>
+            <span class="bp-qn-resize" data-qn-resize="${note.id}" aria-label="Resize note" title="Resize note">↘</span>
             <button type="button" class="bp-qn-mini-button bp-qn-delete" data-qn-delete="${note.id}" title="Delete note" aria-label="Delete note">×</button>
           </div>
         </article>
       `;
     }
 
+    function exportQuickNotes() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        app: "The Backpack",
+        type: "quickNotes",
+        version: BP_USER_CONFIG.appVersion,
+        quickNotes: appState.quickNotes
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backpack-quick-notes-${toDateKey(new Date())}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Quick Notes board exported.");
+    }
+
+    function normalizeQuickNotesBoard(board) {
+      const safeBoard = deepMergeDefaults(defaultState.quickNotes, board || {});
+      safeBoard.notes = Array.isArray(safeBoard.notes) ? safeBoard.notes.map((note, index) => {
+        const normalized = {
+          id: note.id || uid('qn'),
+          col: Number.isFinite(Number(note.col)) ? Number(note.col) : 0,
+          row: Number.isFinite(Number(note.row)) ? Number(note.row) : index,
+          w: Number.isFinite(Number(note.w)) ? Number(note.w) : BP_USER_CONFIG.quickNotes.defaultW,
+          h: Number.isFinite(Number(note.h)) ? Number(note.h) : BP_USER_CONFIG.quickNotes.defaultH,
+          z: Number.isFinite(Number(note.z)) ? Number(note.z) : index + 1,
+          color: note.color || quickNoteColors[index % quickNoteColors.length],
+          textColor: note.textColor || '#151515',
+          title: String(note.title || 'Note'),
+          text: String(note.text || ''),
+          createdAt: note.createdAt || new Date().toISOString(),
+          updatedAt: note.updatedAt || new Date().toISOString()
+        };
+        const cfg = BP_USER_CONFIG.quickNotes;
+        normalized.w = Math.max(cfg.minW, Math.min(cfg.columns, normalized.w));
+        normalized.h = Math.max(cfg.minH, Math.min(cfg.rows, normalized.h));
+        normalized.col = Math.max(0, Math.min(cfg.columns - normalized.w, normalized.col));
+        normalized.row = Math.max(0, Math.min(cfg.rows - normalized.h, normalized.row));
+        return normalized;
+      }) : [];
+      safeBoard.nextZ = Math.max(
+        Number(safeBoard.nextZ || 1),
+        1,
+        ...safeBoard.notes.map(note => Number(note.z || 1))
+      );
+      return safeBoard;
+    }
+
+    async function importQuickNotesFile(file) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const incoming = parsed.quickNotes || parsed.state?.quickNotes || parsed;
+        if (!incoming || !Array.isArray(incoming.notes)) throw new Error("Invalid Quick Notes board.");
+        if (!confirm("Import this Quick Notes board and replace the current board?")) return;
+        appState.quickNotes = normalizeQuickNotesBoard(incoming);
+        saveState();
+        renderApp();
+        showToast("Quick Notes board imported.");
+      } catch (error) {
+        console.error(error);
+        showToast("Could not import that Quick Notes file.");
+      }
+    }
+
     function bindQuickNotes() {
       $('#bpAddQuickNote')?.addEventListener('click', addQuickNote);
+      $('#bpExportQuickNotes')?.addEventListener('click', exportQuickNotes);
+      $('#bpImportQuickNotesBtn')?.addEventListener('click', () => $('#bpQuickNotesImportFile')?.click());
+      $('#bpQuickNotesImportFile')?.addEventListener('change', event => {
+        const file = event.target.files?.[0];
+        if (file) importQuickNotesFile(file);
+        event.target.value = '';
+      });
+      $$('[data-qn-title]').forEach(input => {
+        input.addEventListener('pointerdown', event => event.stopPropagation());
+        input.addEventListener('click', event => event.stopPropagation());
+        input.addEventListener('keydown', event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            input.blur();
+          }
+        });
+        input.addEventListener('blur', () => {
+          const note = appState.quickNotes.notes.find(item => item.id === input.dataset.qnTitle);
+          if (!note) return;
+          note.title = input.value.trim() || 'Note';
+          note.updatedAt = new Date().toISOString();
+          saveState();
+        });
+      });
       $$('[data-qn-delete]').forEach(button => {
         button.addEventListener('click', () => {
           if (!confirm('Delete this note?')) return;
@@ -1128,10 +2521,22 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
         });
       });
       $$('[data-qn-color]').forEach(input => {
+        input.addEventListener('pointerdown', event => event.stopPropagation());
         input.addEventListener('input', () => {
           const note = appState.quickNotes.notes.find(item => item.id === input.dataset.qnColor);
           if (!note) return;
           note.color = input.value;
+          note.updatedAt = new Date().toISOString();
+          saveState();
+          renderQuickNotesSoft();
+        });
+      });
+      $$('[data-qn-text-color]').forEach(input => {
+        input.addEventListener('pointerdown', event => event.stopPropagation());
+        input.addEventListener('input', () => {
+          const note = appState.quickNotes.notes.find(item => item.id === input.dataset.qnTextColor);
+          if (!note) return;
+          note.textColor = input.value;
           note.updatedAt = new Date().toISOString();
           saveState();
           renderQuickNotesSoft();
@@ -1158,7 +2563,10 @@ touch "{{WIKI_BEE_DESCRIPTION}}" "{{WIKI_BEE_FAMILIES}}"
       // Color edits can be applied without interrupting the contenteditable cursor.
       appState.quickNotes.notes.forEach(note => {
         const el = $(`[data-note-id="${note.id}"]`);
-        if (el) el.style.background = note.color;
+        if (el) {
+          el.style.background = note.color;
+          el.style.color = note.textColor || '#151515';
+        }
       });
     }
 
@@ -1271,29 +2679,10 @@ HTML:
 <span class="bp-pill">F = ma</span>`;
 
     async function loadBeesFiles() {
-      try {
-        const response = await fetch(BP_USER_CONFIG.beesMarkdownFile, { cache: 'no-store' });
-        if (!response.ok) throw new Error('Missing bees markdown');
-        appState.bees.markdown = await response.text();
-        appState.bees.markdownSource = `Fetched ${BP_USER_CONFIG.beesMarkdownFile}`;
-      } catch (error) {
-        if (!appState.bees.markdown) {
-          appState.bees.markdown = beesMarkdownFallback;
-          appState.bees.markdownSource = 'Fallback markdown; upload bees.md to replace';
-        }
-      }
-
-      try {
-        const response = await fetch(BP_USER_CONFIG.beesQuoteFile, { cache: 'no-store' });
-        if (!response.ok) throw new Error('Missing bees quote html');
-        appState.bees.quoteHtml = await response.text();
-        appState.bees.quoteSource = `Fetched ${BP_USER_CONFIG.beesQuoteFile}`;
-      } catch (error) {
-        if (!appState.bees.quoteHtml) {
-          appState.bees.quoteHtml = beesQuoteFallback;
-          appState.bees.quoteSource = 'Fallback HTML; upload bees_quote.html to replace';
-        }
-      }
+      appState.bees.markdown = beesMarkdownFallback;
+      appState.bees.quoteHtml = beesQuoteFallback;
+      appState.bees.markdownSource = `Bundled demo ${BP_USER_CONFIG.contentLabels.basicMarkdown}; upload to replace`;
+      appState.bees.quoteSource = `Bundled demo ${BP_USER_CONFIG.contentLabels.basicHtml}; upload to replace`;
       saveState();
       if (appState.activeTab === 'bees') renderApp();
     }
@@ -1324,13 +2713,13 @@ HTML:
             <div class="bp-window-body">
               <h1>Template - Basic</h1>
               <div class="bp-demo-callout"><h3>Basic content pattern</h3><p>Use one Markdown file plus one optional HTML block when a page only needs one focused explanation.</p></div>
-              <p>Newton’s second law is a useful basic-template topic because it uses one readable article, one highlighted formula block, and one reusable copy example.</p>
+              <p>Newton’s second law is a useful basic-template topic because it uses one readable article, one highlighted formula block, and one reusable copy example. Source files are uploaded, not checked from nearby folders.</p>
               <p>Current project placeholder: <strong>${escapeHTML(parsePlaceholders('{{PROJECT_NAME}}'))}</strong>.</p>
             </div>
             <div class="bp-window-footer">
-              <label>Upload basic_newton.md <input id="bpBeesMarkdownFile" type="file" accept=".md,.markdown,text/markdown,text/plain" /></label>
-              <label>Upload basic_newton_quote.html <input id="bpBeesQuoteFile" type="file" accept=".html,text/html,text/plain" /></label>
-              <button type="button" id="bpReloadBees" class="bp-demo-button">↻ Fetch Basic Files</button>
+              <label>Upload ${BP_USER_CONFIG.contentLabels.basicMarkdown} <input id="bpBeesMarkdownFile" type="file" accept=".md,.markdown,text/markdown,text/plain" /></label>
+              <label>Upload ${BP_USER_CONFIG.contentLabels.basicHtml} <input id="bpBeesQuoteFile" type="file" accept=".html,text/html,text/plain" /></label>
+              <button type="button" id="bpReloadBees" class="bp-demo-button">↻ Load bundled demo</button>
             </div>
           </div>
 
@@ -1384,300 +2773,560 @@ HTML:
     }
 
 
+
     /***************************************************************************
-     * Wiki Bees tab: three-column custom content test
+     * Wiki Bees tab: three-column, upload-first wiki stress test
      ***************************************************************************/
-    const wikiBeeDescriptionFallback = `# Bee Description
-
-Bees are winged insects known for pollination, hive behavior, and structured communication. This section demonstrates a long-form Markdown document imported into a medium Backpack template.
-
-Use this file as **Bee_Description.md** inside the local content folder.
-
-## Body plan
-
-- Describe the bee as an animal.
-- Describe the role of pollen and flowers.
-- Explain how the page uses placeholders such as **{{PROJECT_NAME}}**.
-- Keep images in the local \`content/images\` folder.
-
-## Anatomy markers
-
-A simple bee article can be split into readable chunks:
-
-1. **Head** — antennae, compound eyes, and mouthparts.
-2. **Thorax** — wings and legs attach here.
-3. **Abdomen** — digestion, wax glands in some bees, and the stinger in many female bees.
-
-## Museum pattern example
-
-Use callouts for field notes, warnings, and quick definitions. In the live page, the overview also shows a real callout component from the CSS Museum.
-
-> A useful wiki page keeps the main reading column calm, wide, and predictable while side columns carry navigation and references.
-`;
-
-    const wikiBeeFamiliesFallback = `# Bee Families
-
-This section demonstrates a second Markdown source file. It is intended to be saved as **Bee_Families.md**.
-
-## Example families and groups
-
-- **Apidae** — includes honey bees, bumblebees, and carpenter bees.
-- **Megachilidae** — includes leafcutter and mason bees.
-- **Halictidae** — often called sweat bees.
-- **Andrenidae** — mining bees that often nest in soil.
-- **Colletidae** — sometimes called plasterer bees.
-
-## Wiki-style notes
-
-Each family entry can grow into its own Markdown file later. This template currently keeps two documents to prove the custom page pattern without overengineering the file loader.
-
-### Maintenance rule
-
-Keep long text in Markdown and keep figures in the local image folder. Avoid storing large images inside exported state unless the user explicitly needs portable embedded media.
-`;
-
-    const wikiBeeImages = [
+    const wikiBeePages = [
       {
-        title: 'Worker Bee Reference',
-        src: 'content/images/bee_worker.svg',
-        caption: 'Worker bee diagram stored as a local SVG file.',
-        footnote: 'Local path: content/images/bee_worker.svg'
+            "id": "index",
+            "nav": "Wiki Index",
+            "group": "meta",
+            "title": "Wiki Index",
+            "description": "A compact entry page for the medium template. It tests long-form navigation, multiple Markdown fragments, a right-side infobox, and upload-first wiki authoring without a local server.",
+            "image": {
+                  "key": "hive",
+                  "src": "content/images/bee_hive.svg",
+                  "alt": "Stylized hive reference",
+                  "caption": "The wiki index uses the hive image as a map symbol: many small files, one organized structure."
+            },
+            "sidecar": {
+                  "sourceId": "side_index",
+                  "fileName": "index__side_note.md",
+                  "title": "Index side note",
+                  "fallback": "**Status:** bundled demo content.\n\nThis right column is intentionally shorter than the article column. It behaves like a wiki infobox: one image, a short context note, and a source line. Upload a replacement side-note Markdown file for the selected page to test how the component handles custom metadata."
+            },
+            "sections": [
+                  {
+                        "sourceId": "index_orientation",
+                        "fileName": "index__orientation.md",
+                        "title": "How to read this wiki",
+                        "fallback": "This page is a stress test for Template - Medium. The left column behaves as a cascade index; the center column renders the selected page as a title, description, and a sequence of Markdown fragments; the right column keeps a stable visual reference and a short secondary note. That structure is closer to a small wiki than a single article because each subtitle can be maintained as its own file.\n\nThe current build does not try to fetch neighboring files. Instead, it ships with bundled demo text and lets the user upload Markdown files into the running page. That means the same HTML can be opened directly from disk, backed up as state, and moved without assuming a server. The tradeoff is that a large wiki needs a clear naming convention so uploaded files can be mapped to their intended slots.\n\nThe file names shown in the source strips are intentionally verbose. They make testing easier: a writer can export or edit the fragments separately, then select several files at once using the bundle upload control."
+                  },
+                  {
+                        "sourceId": "index_structure",
+                        "fileName": "index__structure.md",
+                        "title": "Page structure under stress",
+                        "fallback": "A medium template becomes maintainable when the data model does most of the work. Instead of writing a new renderer for every article, each page record declares a navigation label, a title, a description, a list of section files, one side-note file, and one image slot. The renderer then loops through those records.\n\nThis makes the wiki expandable in a controlled way. Adding a page should mean adding one configuration object and several Markdown files, not opening the tab binder, adding new switch cases, and copying markup by hand. It also makes future promotion possible: a wiki section, image card, or source panel could be promoted to a persistent shelf just like the Event Gantt.\n\nFor readability, the main text column should remain calm. It should not be filled with authoring controls. Controls belong in Column A and Column C, while Column B is treated as the reading surface."
+                  }
+            ]
       },
       {
-        title: 'Hive Reference',
-        src: 'content/images/bee_hive.svg',
-        caption: 'Hive diagram for the local wiki image viewer.',
-        footnote: 'Local path: content/images/bee_hive.svg'
+            "id": "overview",
+            "nav": "Template Overview",
+            "group": "meta",
+            "title": "Template Overview",
+            "description": "A maintenance-focused explanation of how Template - Medium should behave as it moves from a demo page toward a reusable wiki pattern.",
+            "image": {
+                  "key": "worker",
+                  "src": "content/images/bee_worker.svg",
+                  "alt": "Worker bee reference",
+                  "caption": "The worker bee image represents a reusable unit: one small component doing a clear job inside a larger system."
+            },
+            "sidecar": {
+                  "sourceId": "side_overview",
+                  "fileName": "template_overview__side_note.md",
+                  "title": "Template note",
+                  "fallback": "**Pattern:** page registry + Markdown bundle + infobox.\n\nA healthy medium template should be boring to extend. New content should mostly be data; visual behavior should stay centralized."
+            },
+            "sections": [
+                  {
+                        "sourceId": "overview_registry",
+                        "fileName": "template_overview__registry_model.md",
+                        "title": "The registry model",
+                        "fallback": "The wiki is now best understood as a registry-driven page family. A registry entry tells Backpack what to show in each column: the navigation label, the page header, the Markdown fragments, the infobox image, and the side Markdown file. The tab does not need to know whether it is showing food, language notes, or gallery entries; it only needs to render the active page record.\n\nThis is similar to the tab cleanup already done in Backpack. Tabs became easier to expand when rendering and binding were attached to one registry object. The same idea works inside a template: each wiki page should register its content, not demand new branches in the renderer.\n\nThe page registry also gives us a place to define upload conventions. A writer can upload a group of files, and Backpack can map each file to a section by filename instead of making the user select every slot manually."
+                  },
+                  {
+                        "sourceId": "overview_columns",
+                        "fileName": "template_overview__three_columns.md",
+                        "title": "Why three columns help",
+                        "fallback": "Column A is navigation and authoring control. It should remain compact, predictable, and tolerant of growth. Cascade navigation works here because it provides structure without depending on color alone: the separator and selected marker still communicate state in monochrome displays.\n\nColumn B is the primary reading surface. It carries the title, page description, and subtitle-based Markdown fragments. This prevents a long page from becoming one unbroken document, while still letting the reader scroll naturally through the selected subject.\n\nColumn C is an infobox. It contains a top image and a smaller Markdown note. That makes it useful for definitions, source notes, warnings, or small metadata without interrupting the main article."
+                  },
+                  {
+                        "sourceId": "overview_uploads",
+                        "fileName": "template_overview__upload_workflow.md",
+                        "title": "Upload-first workflow",
+                        "fallback": "Because Backpack is designed to run without a local server, the wiki cannot rely on automatic local file checks. The safe path is to keep bundled demo content in the app, then let users upload Markdown and images when they want to replace it. Uploaded content can be saved in Backpack state and exported as JSON.\n\nFor a small wiki, manual upload buttons are enough. For a larger wiki, a bundle upload is more practical. The bundle control reads multiple Markdown files, matches known filenames, and updates only the recognized slots. Unknown files are ignored instead of guessing, because accidental overwrites are worse than a skipped import.\n\nThis gives us a realistic authoring loop: write Markdown files outside the app, open the HTML directly, upload the bundle, inspect the rendered result, export state if the page should travel as a portable snapshot."
+                  }
+            ]
+      },
+      {
+            "id": "about",
+            "nav": "About Bees",
+            "group": "article",
+            "title": "About Bees",
+            "description": "A grounded introduction to bees as insects: diverse pollinators, not just honey makers, with many body forms and life histories.",
+            "image": {
+                  "key": "flower",
+                  "src": "content/images/bee_flower.svg",
+                  "alt": "Bee visiting a flower",
+                  "caption": "Bees and flowering plants are linked through repeated visits: nectar and pollen for the bee, pollen transfer for the plant."
+            },
+            "sidecar": {
+                  "sourceId": "side_about",
+                  "fileName": "about_bees__side_note.md",
+                  "title": "About side note",
+                  "fallback": "**Quick distinction:** honey bees are only one kind of bee.\n\nMany bees are solitary, many do not make honey, and many are easy to overlook because they are tiny, dark, or active only during particular seasons."
+            },
+            "sections": [
+                  {
+                        "sourceId": "about_animal",
+                        "fileName": "about_bees__what_a_bee_is.md",
+                        "title": "What a bee is",
+                        "fallback": "Bees are insects in the order Hymenoptera, the broader group that also includes ants and wasps. They have three main body regions: head, thorax, and abdomen. Their antennae help them sense chemicals, air movement, and touch; their compound eyes help them navigate flowers and light; their legs often carry specialized hairs or structures that move pollen.\n\nA common mistake is to define bees by honey. Honey bees do produce honey, but most bee species do not live in large managed hives and do not make harvestable honey stores. The more useful definition is ecological: bees are flower-visiting insects whose life cycles are closely tied to pollen and nectar.\n\nThat link to flowers explains why bees matter far beyond the hive. A bee is not only an animal; it is also a small moving bridge between plants, landscapes, farms, gardens, and food systems."
+                  },
+                  {
+                        "sourceId": "about_diversity",
+                        "fileName": "about_bees__diversity.md",
+                        "title": "Diversity beyond the honey bee",
+                        "fallback": "There are more than twenty thousand known bee species in the world. They range from very small solitary bees that can be mistaken for flies to large carpenter bees and fuzzy bumble bees. Their colors are not limited to yellow and black: some are metallic green or blue, some are coppery, and many are plain brown or black.\n\nDiversity also appears in nesting behavior. Some bees nest in soil, others use hollow stems, old beetle tunnels, wood, or cavities. Some are generalists that visit many kinds of flowers, while others are specialists that gather pollen from a narrower range of plants.\n\nThat variety matters for a wiki. A bee page that only shows honey bees can accidentally teach the wrong mental model. A better article introduces honey bees as important, then immediately opens the door to solitary bees, bumble bees, mason bees, leafcutter bees, sweat bees, carpenter bees, and many others."
+                  },
+                  {
+                        "sourceId": "about_pollination",
+                        "fileName": "about_bees__pollination_basics.md",
+                        "title": "Pollination basics",
+                        "fallback": "Pollination is the movement of pollen from the male parts of a flower to the female parts of a flower. Some plants use wind, water, or self-pollination, but many flowering plants benefit from animal visitors. Bees are especially effective because pollen is not an accident in their lives; they actively gather it as food for their young.\n\nWhen a bee visits a flower, grains of pollen can stick to the hairs on its body. As the bee moves to another flower, some of that pollen may rub off in the right place. The plant may then form fruit or seed, while the bee receives nectar, pollen, or both.\n\nThe relationship is not always simple or equal. Different plants need different visitors, and not every bee is effective on every flower. That complexity is why a healthy landscape usually needs many pollinator species, not just one managed species doing all the work."
+                  }
+            ]
+      },
+      {
+            "id": "languages",
+            "nav": "Bee: The word in other languages",
+            "group": "article",
+            "title": "Bee: The word in other languages",
+            "description": "A language page for testing tables, pronunciation notes, and short comparative paragraphs inside the Markdown renderer.",
+            "image": {
+                  "key": "worker",
+                  "src": "content/images/bee_worker.svg",
+                  "alt": "Worker bee language reference",
+                  "caption": "The word changes across languages, but the small familiar insect remains easy to recognize."
+            },
+            "sidecar": {
+                  "sourceId": "side_languages",
+                  "fileName": "bee_languages__side_note.md",
+                  "title": "Language side note",
+                  "fallback": "**Translation note:** animal names often carry folk memory.\n\nSome languages distinguish honey bees, wild bees, wasps, or stinging insects more sharply than casual English does."
+            },
+            "sections": [
+                  {
+                        "sourceId": "languages_romance",
+                        "fileName": "bee_languages__romance_and_germanic.md",
+                        "title": "Romance and Germanic roots",
+                        "fallback": "Across several Romance languages, the word for bee is close but not identical: Spanish uses **abeja**, French uses **abeille**, Italian uses **ape**, and Portuguese uses **abelha**. The changes are a good reminder that recognizable word families still branch into local sound patterns.\n\nGermanic languages offer another cluster: German **Biene**, Dutch **bij**, Swedish **bi**, and Danish **bi**. English **bee** sits comfortably in that group. These short words are useful in a compact wiki because they create a clear table-like rhythm even with a simple Markdown renderer.\n\nA future richer Markdown layer could render this as a true table. For now, short bold terms and bullet lists provide enough structure to test reading density without adding a new parser dependency."
+                  },
+                  {
+                        "sourceId": "languages_world",
+                        "fileName": "bee_languages__world_examples.md",
+                        "title": "Examples from other language families",
+                        "fallback": "Outside Europe, the words vary more sharply. Arabic commonly uses **نحلة** (*naḥla*) for bee. Hebrew uses **דבורה** (*devorah*). Japanese uses **蜂** (*hachi*), while Chinese often uses **蜜蜂** (*mìfēng*) for honey bee. Swahili uses **nyuki**.\n\nThese examples should be treated as entry points rather than a complete linguistic survey. Some words refer broadly to bees, while others are more specifically tied to honey bees or stinging insects depending on context. A careful wiki would eventually separate everyday vocabulary from scientific names and local ecological terms.\n\nThe page is still useful as a UI test. It stresses bold text, italics, non-Latin scripts, parenthetical pronunciation notes, and short paragraphs that can become visually noisy if the column is too narrow."
+                  },
+                  {
+                        "sourceId": "languages_science",
+                        "fileName": "bee_languages__scientific_names.md",
+                        "title": "Scientific naming as a second language",
+                        "fallback": "Scientific names give the wiki a different kind of language. The western honey bee is **Apis mellifera**. Bumble bees belong to the genus **Bombus**. Leafcutter and mason bees are often discussed within **Megachilidae**, while many sweat bees belong to **Halictidae**.\n\nThese names are not decorative. They help avoid confusion when common names shift across regions. A common name can describe behavior, appearance, habitat, or a local tradition; a scientific name points to a taxonomic relationship.\n\nFor Backpack, scientific names are also a good formatting test. The renderer needs to support italics and inline code-like terms cleanly because wiki pages often mix natural language, labels, lists, and short technical references."
+                  }
+            ]
+      },
+      {
+            "id": "social",
+            "nav": "Bees being Social",
+            "group": "article",
+            "title": "Bees being Social",
+            "description": "A page about cooperation, caste systems, communication, and the important limit: most bees are not honey-bee-style hive insects.",
+            "image": {
+                  "key": "hive",
+                  "src": "content/images/bee_hive.svg",
+                  "alt": "Hive social structure",
+                  "caption": "The hive image fits social bees, but the article keeps reminding readers that many bees live differently."
+            },
+            "sidecar": {
+                  "sourceId": "side_social",
+                  "fileName": "bees_social__side_note.md",
+                  "title": "Social side note",
+                  "fallback": "**Important limit:** social bees are memorable, but solitary bees are common.\n\nThe wiki should not let the honey bee become the template for all bees."
+            },
+            "sections": [
+                  {
+                        "sourceId": "social_colony",
+                        "fileName": "bees_social__colony_roles.md",
+                        "title": "Colony roles",
+                        "fallback": "In honey bee colonies, social life is organized around a queen, workers, and drones. The queen lays eggs, workers perform many colony tasks, and drones are male bees involved in reproduction. Workers may clean cells, feed larvae, build comb, process nectar, guard the entrance, or forage depending on age and colony need.\n\nThis division of labor is one reason honey bees are so fascinating to humans. A hive looks like a single organism made of many bodies: food collection, temperature regulation, brood care, defense, and communication all happen through coordinated behavior.\n\nBut the same fascination can distort the larger story. Honey bees are social specialists, not the default form of bee life. A good wiki page should use them to explain social complexity while still leaving room for bumble bees, communal nesters, and solitary species."
+                  },
+                  {
+                        "sourceId": "social_communication",
+                        "fileName": "bees_social__communication.md",
+                        "title": "Communication and the waggle dance",
+                        "fallback": "Honey bees are famous for the waggle dance, a behavior used by returning foragers to communicate information about valuable resources. The dance is not a cute extra; it is part of how a colony can direct attention toward flowers, water, or nesting information.\n\nThe dance also shows why social behavior is more than crowding many insects together. A colony needs information flow. Foragers must share resource cues, receivers must interpret them, and the colony must adjust as flowers open, weather changes, or competition appears.\n\nFor a wiki stress test, this topic is useful because it contains several layers: behavior, communication, learning, and ecology. The page needs enough room for explanation without becoming a dense block of undifferentiated text."
+                  },
+                  {
+                        "sourceId": "social_solitary",
+                        "fileName": "bees_social__solitary_counterpoint.md",
+                        "title": "The solitary counterpoint",
+                        "fallback": "Most bee species are solitary or do not live in honey-bee-style colonies. In many solitary species, each female builds or finds a nest, provisions it with pollen and nectar, lays eggs, and leaves the next generation to develop. There is no queen-worker division in the familiar hive sense.\n\nSolitary does not mean simple or unimportant. Some solitary bees are excellent pollinators, and many have close relationships with particular habitats or plant groups. Their lives are often less visible because they do not gather in large, conspicuous colonies.\n\nThe social page therefore needs a counterpoint section. It should teach that sociality is a spectrum, not a binary, and that human attention often follows the biggest, loudest, or most economically managed species."
+                  }
+            ]
+      },
+      {
+            "id": "food",
+            "nav": "Bees relevance on people's food",
+            "group": "article",
+            "title": "Bees relevance on people's food",
+            "description": "A longer test page about foods and products linked to bee pollination, built from three separate Markdown fragments as requested.",
+            "image": {
+                  "key": "food",
+                  "src": "content/images/bee_food.svg",
+                  "alt": "Bee pollination and food basket",
+                  "caption": "Bees are easiest to notice at flowers, but the result often appears later as fruits, seeds, nuts, oils, and animal feed."
+            },
+            "sidecar": {
+                  "sourceId": "side_food",
+                  "fileName": "bees_food__side_note.md",
+                  "title": "Food side note",
+                  "fallback": "**Useful framing:** bees do not create every food.\n\nGrains such as wheat, rice, and corn are mostly wind-pollinated. The bee connection is strongest in many fruits, nuts, vegetables, oilseeds, spices, and forage crops."
+            },
+            "sections": [
+                  {
+                        "sourceId": "food_direct",
+                        "fileName": "bees_food__foods_directly_impacted.md",
+                        "title": "Foods directly impacted from bees",
+                        "fallback": "Many familiar foods become easier to understand when seen through pollination. Apples, cherries, blueberries, melons, cucumbers, squash, pumpkins, almonds, and many seed crops depend on or benefit from animal pollinators. Bees are often central because they repeatedly visit flowers while collecting pollen and nectar.\n\nThe word **depend** needs care. Some crops require insect pollination to set a good crop; others can produce without bees but may produce larger, more uniform, or more numerous fruits when pollination improves. That makes bee relevance a gradient rather than an on-off switch.\n\nIn practical food systems, managed honey bees are moved to many crops, while wild bees and other pollinators also contribute. A wiki should show both sides: the agricultural logistics of managed colonies and the ecological value of diverse local pollinator communities."
+                  },
+                  {
+                        "sourceId": "food_hidden",
+                        "fileName": "bees_food__foods_you_didnt_know.md",
+                        "title": "Foods you didn't know exist thanks to bees' work",
+                        "fallback": "Some bee-linked foods are obvious because they are fruits or nuts. Others are less visible. Oilseed crops, seed production for vegetables, spices, and forage plants can all be connected to pollination. Alfalfa, for example, is a forage crop used to feed livestock; pollination affects seed production, which indirectly supports dairy and meat systems.\n\nThere are also foods where the bee connection appears at the ingredient level. A dessert may contain almonds, berries, pumpkin, or a spice whose production benefited from pollinators. A salad may include cucumbers, squash, or seed-grown vegetables. The bee is not in the recipe, but the flower visit happened earlier in the chain.\n\nThis is why simplified claims such as one exact fraction of all food can be misleading if used without context. The stronger lesson is that pollinators support a large share of crop diversity, especially the colorful, nutritious, high-value foods people associate with varied diets."
+                  },
+                  {
+                        "sourceId": "food_products",
+                        "fileName": "bees_food__other_foods_and_products.md",
+                        "title": "Other foods and products we thank bees for",
+                        "fallback": "Bees are also linked to products that are not simply fresh fruit on a plate. Honey is the obvious example, but beeswax appears in candles, cosmetics, polishes, art materials, and traditional preparations. Propolis and royal jelly are marketed in some contexts, though a careful wiki should distinguish cultural use from medical claims.\n\nPollination also supports seed production, breeding, and farm resilience. If growers want seed for the next crop, pollination can matter even when the edible part is not the fruit. This is especially relevant for gardeners and small farms that save seed or depend on local plant reproduction.\n\nThe point is not to romanticize bees as magical food makers. It is to show that their work is distributed across systems. A bee visit may become a fruit, a seed packet, a forage crop, a jar of honey, a block of wax, or simply a healthier patch of flowering habitat."
+                  }
+            ]
+      },
+      {
+            "id": "gallery",
+            "nav": "Gallery of Interesting Bees",
+            "group": "article",
+            "title": "Gallery of Interesting Bees",
+            "description": "A gallery-style article for testing repeated cards, short species notes, and image-heavy sidebar behavior without requiring a full image gallery component yet.",
+            "image": {
+                  "key": "gallery",
+                  "src": "content/images/bee_gallery.svg",
+                  "alt": "Gallery of stylized bees",
+                  "caption": "A single image holder can preview the visual language before a real gallery component exists."
+            },
+            "sidecar": {
+                  "sourceId": "side_gallery",
+                  "fileName": "interesting_bees__side_note.md",
+                  "title": "Gallery side note",
+                  "fallback": "**Future upgrade:** this page is a candidate for promotion.\n\nA gallery strip could eventually be pinned above the tab workspace, letting the reader switch articles while keeping bee cards visible."
+            },
+            "sections": [
+                  {
+                        "sourceId": "gallery_honey_bumble",
+                        "fileName": "interesting_bees__honey_and_bumble.md",
+                        "title": "Honey bees and bumble bees",
+                        "fallback": "Honey bees are the best-known managed bees. They live in large perennial colonies, store honey, build wax comb, and are transported for pollination in many agricultural systems. Their familiarity makes them useful for teaching, but it also means they can overshadow other bees.\n\nBumble bees are also social, but their colonies are usually smaller and seasonal. They are fuzzy, strong fliers, and effective at visiting some flowers that benefit from vibration or buzz pollination. Their body shape and behavior make them easy to distinguish from the leaner image many people associate with honey bees.\n\nPutting honey bees and bumble bees together in the gallery helps readers see social diversity. Both can live cooperatively, but they do not organize their colonies in exactly the same way."
+                  },
+                  {
+                        "sourceId": "gallery_mason_leafcutter",
+                        "fileName": "interesting_bees__mason_and_leafcutter.md",
+                        "title": "Mason bees and leafcutter bees",
+                        "fallback": "Mason bees are solitary bees often associated with nesting in cavities. They use mud or similar materials to partition nest cells. Gardeners sometimes notice them because they will use suitable holes or nesting blocks when habitat is available.\n\nLeafcutter bees are also solitary and are known for cutting neat pieces from leaves to line their nests. The leaf circles can look like damage, but they are often a sign of nesting activity rather than a serious plant problem.\n\nThese bees are valuable gallery subjects because their behaviors are visual. A wiki can eventually pair short text with nest diagrams, leaf-cut patterns, and cavity cross-sections."
+                  },
+                  {
+                        "sourceId": "gallery_orchid_sweat",
+                        "fileName": "interesting_bees__orchid_and_sweat.md",
+                        "title": "Orchid bees, sweat bees, and cuckoo bees",
+                        "fallback": "Orchid bees are famous for vivid metallic colors and specialized fragrance-gathering behavior in some groups. They make an excellent reminder that bees can be visually surprising, not just striped yellow insects.\n\nSweat bees are a diverse group that may be small, metallic, or easily overlooked. Some are attracted to perspiration, which gives the group its common name. Their variety makes them useful for explaining why common names are rough handles, not complete biological descriptions.\n\nCuckoo bees add a stranger story. Some lay eggs in the nests of other bees instead of provisioning their own nest cells. Including them prevents the gallery from becoming only a list of charming pollinators; bee life also includes competition, parasitism, and ecological complexity."
+                  }
+            ]
+      },
+      {
+            "id": "links",
+            "nav": "Links",
+            "group": "article",
+            "title": "Links",
+            "description": "A compact source and reading list page. It tests external Markdown links and gives the bee demo a factual spine.",
+            "image": {
+                  "key": "flower",
+                  "src": "content/images/bee_flower.svg",
+                  "alt": "Bee source links",
+                  "caption": "Links are the wiki's pollen trail: they connect a readable page back to stronger references."
+            },
+            "sidecar": {
+                  "sourceId": "side_links",
+                  "fileName": "links__side_note.md",
+                  "title": "Links side note",
+                  "fallback": "**Editorial rule:** source pages should be boring and useful.\n\nPrefer institutional, educational, or primary research links before general trivia pages."
+            },
+            "sections": [
+                  {
+                        "sourceId": "links_core",
+                        "fileName": "links__core_sources.md",
+                        "title": "Core sources used for the demo",
+                        "fallback": "- [FAO Global Action on Pollination Services](https://www.fao.org/pollination/en) — good high-level figures on pollinators, crop plants, and crop production volume.\n- [USGS: How many species of native bees are in the United States?](https://www.usgs.gov/faqs/how-many-species-native-bees-are-united-states) — useful for species diversity context.\n- [USDA: Honey Bees](https://www.usda.gov/about-usda/general-information/initiatives-and-highlighted-programs/peoples-garden/importance-pollinators/honey-bees) — concise agricultural framing for honey bee pollination value in the United States.\n\nThese links are included because the demo text makes claims about bee diversity and pollination. The wiki itself should not pretend to be a primary source. It should make the reading path visible."
+                  },
+                  {
+                        "sourceId": "links_further",
+                        "fileName": "links__further_reading.md",
+                        "title": "Further reading",
+                        "fallback": "- [Xerces Society: Wild Bee Conservation](https://www.xerces.org/endangered-species/wild-bees) — accessible conservation framing, especially for wild and native bees.\n- [Britannica: Bee](https://www.britannica.com/animal/bee) — broad reference article with useful distinctions between solitary and social bees.\n- [UC San Diego Today: bee waggle dance learning](https://today.ucsd.edu/story/complex-learned-social-behavior-discovered-in-bees-waggle-dance) — readable article on social learning and the waggle dance.\n\nA future Backpack wiki might support citations as first-class metadata. For now, a dedicated links page keeps the reading column clean while still making references discoverable."
+                  }
+            ]
       }
-    ];
+];
 
-    const wikiBeeCodeBlocks = [
-      {
-        title: 'ASCII Bee Art',
-        code: `  \\     //
-   \\.-.//
-   (o o)
-  <=={_}==>
-     '-'
-`
-      },
-      {
-        title: 'Bee Callout HTML',
-        code: `<div class="bp-demo-callout">
-  <h3>Bee Field Note</h3>
-  <p>Use callouts for emphasized wiki notes, warnings, or quick facts.</p>
-</div>`
-      },
-      {
-        title: 'Bee Markdown Figure',
-        code: `## Bee Figure
+    const wikiBeeFileIndex = new Map();
+    wikiBeePages.forEach(page => {
+      page.sections.forEach(section => {
+        wikiBeeFileIndex.set(normalizeWikiFileName(section.fileName), {
+          sourceId: section.sourceId,
+          label: `${page.title} / ${section.title}`,
+          type: 'section'
+        });
+      });
+      wikiBeeFileIndex.set(normalizeWikiFileName(page.sidecar.fileName), {
+        sourceId: page.sidecar.sourceId,
+        label: `${page.title} / ${page.sidecar.title}`,
+        type: 'sidecar'
+      });
+    });
 
-![Worker bee]({{WIKI_BEE_WORKER_IMAGE}})
+    function normalizeWikiFileName(fileName) {
+      return String(fileName || '').trim().toLowerCase();
+    }
 
-*Worker bee local image reference.*`
-      },
-      {
-        title: 'Bee Image Viewer Figure HTML',
-        code: `<figure class="bp-wiki-figure">
-  <img src="{{WIKI_BEE_HIVE_IMAGE}}" alt="Hive reference" />
-  <figcaption>Hive reference stored in the local image folder.</figcaption>
-</figure>`
-      },
-      {
-        title: 'Bee Section Starter',
-        code: `# New Bee Section
+    function getWikiBeePage(pageId = '') {
+      const requested = pageId || appState.wikiBees.activePage || appState.wikiBees.activeSection || 'index';
+      return wikiBeePages.find(page => page.id === requested) || wikiBeePages[0];
+    }
 
-## Summary
+    function getWikiBeeOverride(sourceId) {
+      return appState.wikiBees.files?.[sourceId] || null;
+    }
 
-Write one calm introductory paragraph.
+    function getWikiBeeMarkdown(sourceId, fallback) {
+      return getWikiBeeOverride(sourceId)?.markdown || fallback || '';
+    }
 
-## Notes
+    function getWikiBeeSource(sourceId) {
+      return getWikiBeeOverride(sourceId)?.source || 'Bundled demo';
+    }
 
-- Add a short fact.
-- Add an image reference.
-- Add a source footnote.`
+    function countWikiBeeUploadedFiles(page) {
+      return page.sections.concat([page.sidecar]).filter(item => Boolean(getWikiBeeOverride(item.sourceId))).length;
+    }
+
+    async function loadWikiBeeDemo() {
+      appState.wikiBees.files = {};
+      appState.wikiBees.images = {};
+      appState.wikiBees.demoLoaded = true;
+      saveState();
+      renderApp();
+      showToast('Template - Medium reset to bundled wiki demo.');
+    }
+
+    function getWikiBeeImageSource(page) {
+      return appState.wikiBees.images?.[page.image.key]?.src || page.image.src;
+    }
+
+    function getWikiBeeImageStatus(page) {
+      return appState.wikiBees.images?.[page.image.key]?.source || 'Bundled image path';
+    }
+
+    function readFileAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => resolve(String(reader.result || '')));
+        reader.addEventListener('error', () => reject(reader.error || new Error('Could not read file.')));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function uploadWikiBeeImageForPage(page, file) {
+      if (!file) return;
+      appState.wikiBees.images ||= {};
+      appState.wikiBees.images[page.image.key] = {
+        src: await readFileAsDataURL(file),
+        source: `Uploaded ${file.name}`
+      };
+      saveState();
+      renderApp();
+      showToast(`${page.title} image uploaded.`);
+    }
+
+    async function uploadWikiBeeMarkdownToSource(sourceId, file) {
+      if (!file || !sourceId) return false;
+      appState.wikiBees.files ||= {};
+      appState.wikiBees.files[sourceId] = {
+        markdown: await file.text(),
+        source: `Uploaded ${file.name}`
+      };
+      return true;
+    }
+
+    async function uploadWikiBeeMarkdownBundle(fileList) {
+      const files = Array.from(fileList || []);
+      let matched = 0;
+      const skipped = [];
+      for (const file of files) {
+        const entry = wikiBeeFileIndex.get(normalizeWikiFileName(file.name));
+        if (!entry) {
+          skipped.push(file.name);
+          continue;
+        }
+        if (await uploadWikiBeeMarkdownToSource(entry.sourceId, file)) matched += 1;
       }
-    ];
-
-    async function loadWikiBeeFiles() {
-      await Promise.all([loadWikiBeeFile('description'), loadWikiBeeFile('families')]);
+      saveState();
+      renderApp();
+      if (matched) {
+        showToast(`Imported ${matched} wiki Markdown file${matched === 1 ? '' : 's'}.${skipped.length ? ` Skipped ${skipped.length}.` : ''}`);
+      } else {
+        showToast('No wiki filenames matched the bundle map.');
+      }
     }
 
     function renderWikiBees() {
-      const section = appState.wikiBees.activeSection || 'overview';
-      const image = wikiBeeImages[appState.wikiBees.activeImage] || wikiBeeImages[0];
-      const mainContent = renderWikiBeeMain(section);
+      const page = getWikiBeePage();
+      const uploadedCount = countWikiBeeUploadedFiles(page);
+      const totalFiles = page.sections.length + 1;
       return `
         <section class="bp-panel bp-wiki-panel">
           <div class="bp-panel-header">
             <div>
               <h2>Template - Medium</h2>
-              <p>Medium custom page template: left controls, middle Markdown reader, right local image/code reference column.</p>
+              <p>Three-column wiki template: cascade index, Markdown page fragments, and a compact infobox. Uploads replace bundled demo files without requiring a local server.</p>
+            </div>
+            <div class="bp-row bp-wiki-panel-actions">
+              <span class="bp-pill">${uploadedCount}/${totalFiles} page files uploaded</span>
             </div>
           </div>
           <div class="bp-wiki-layout">
-            <aside class="bp-card bp-wiki-controls">
-              <h3>Wiki Index</h3>
-              ${renderWikiBeeButton('overview', 'Overview')}
-              ${renderWikiBeeButton('description', 'Bee Description')}
-              ${renderWikiBeeButton('families', 'Bee Families')}
-              ${renderWikiBeeButton('images', 'Images')}
-              <hr>
-              <button type="button" data-wiki-action="fetch">Fetch Wiki Files</button>
-              <label class="bp-wiki-upload">Upload Description<input id="bpWikiDescriptionFile" type="file" accept=".md,.markdown,text/markdown,text/plain" /></label>
-              <label class="bp-wiki-upload">Upload Families<input id="bpWikiFamiliesFile" type="file" accept=".md,.markdown,text/markdown,text/plain" /></label>
-              <hr>
-              <button type="button" data-wiki-copy="description">Copy Description MD</button>
-              <button type="button" data-wiki-copy="families">Copy Families MD</button>
+            <aside class="bp-card bp-wiki-controls" aria-label="Wiki navigation">
+              <div class="bp-wiki-nav-heading">Wiki Index</div>
+              <nav class="bp-wiki-nav-list">
+                ${wikiBeePages.map((item, index) => `${index === 2 ? '<div class="bp-wiki-nav-divider" aria-hidden="true"></div>' : ''}${renderWikiBeeButton(item)}`).join('')}
+              </nav>
+              <div class="bp-wiki-authoring">
+                <label class="bp-wiki-upload">Upload MD bundle<input id="bpWikiBundleFiles" type="file" multiple accept=".md,.markdown,text/markdown,text/plain" /></label>
+                <button type="button" data-wiki-action="demo">Reset demo</button>
+                <p class="bp-wiki-help">Bundle upload matches known filenames such as <code>${escapeHTML(page.sections[0]?.fileName || '')}</code>.</p>
+              </div>
             </aside>
 
             <main class="bp-window bp-reading-window bp-wiki-main">
               <div class="bp-window-titlebar">
                 <span class="bp-window-control" aria-hidden="true"></span>
-                <div class="bp-window-lines">${escapeHTML(wikiBeeTitle(section))}</div>
+                <div class="bp-window-lines">${escapeHTML(page.title)}</div>
                 <span class="bp-window-control" aria-hidden="true"></span>
               </div>
-              <article class="bp-window-body bp-markdown">
-                ${mainContent}
+              <article class="bp-window-body bp-markdown bp-wiki-article">
+                ${renderWikiBeePage(page)}
               </article>
               <div class="bp-window-footer bp-wiki-status">
-                <span>${escapeHTML(appState.wikiBees.description.source)}</span>
-                <span>${escapeHTML(appState.wikiBees.families.source)}</span>
+                <span>${escapeHTML(page.sections.length)} section files</span>
+                <span>${escapeHTML(page.sidecar.fileName)}</span>
               </div>
             </main>
 
             <aside class="bp-wiki-right">
-              <div class="bp-window bp-wiki-image-window">
-                <div class="bp-window-titlebar">
-                  <span class="bp-window-control" aria-hidden="true"></span>
-                  <div class="bp-window-lines">${escapeHTML(image.title)}</div>
-                  <span class="bp-window-control" aria-hidden="true"></span>
-                </div>
-                <div class="bp-window-body bp-wiki-image-body">
-                  <img src="${escapeHTML(image.src)}" alt="${escapeHTML(image.title)}" />
-                  <p><strong>${escapeHTML(image.caption)}</strong></p>
-                  <p class="bp-wiki-footnote">${escapeHTML(image.footnote)}</p>
-                </div>
-                <div class="bp-window-footer bp-wiki-image-controls">
-                  <button type="button" data-wiki-image="prev">◀</button>
-                  <span>${appState.wikiBees.activeImage + 1}/${wikiBeeImages.length}</span>
-                  <button type="button" data-wiki-image="next">▶</button>
-                </div>
-              </div>
-
-              <div class="bp-card bp-wiki-code-card">
-                <h3>Copy Examples</h3>
-                ${wikiBeeCodeBlocks.map((block, index) => `
-                  <details ${index === 0 ? 'open' : ''}>
-                    <summary>${escapeHTML(block.title)}</summary>
-                    <pre><code>${escapeHTML(parsePlaceholders(block.code))}</code></pre>
-                    <button type="button" data-wiki-code="${index}">Copy</button>
-                  </details>
-                `).join('')}
-              </div>
+              ${renderWikiBeeAside(page)}
             </aside>
           </div>
         </section>
       `;
     }
 
-    function renderWikiBeeButton(id, label) {
-      const selected = appState.wikiBees.activeSection === id;
-      return `<button type="button" class="bp-wiki-nav-button" data-wiki-section="${id}" aria-pressed="${selected}">${selected ? '▸' : ' '} ${escapeHTML(label)}</button>`;
+    function renderWikiBeeButton(page) {
+      const selected = getWikiBeePage().id === page.id;
+      const groupClass = page.group === 'meta' ? 'bp-wiki-nav-meta' : 'bp-wiki-nav-article';
+      return `<button type="button" class="bp-wiki-nav-button ${groupClass}" data-wiki-page="${escapeHTML(page.id)}" aria-pressed="${selected}"><span class="bp-wiki-nav-marker" aria-hidden="true">${selected ? '▸' : '•'}</span><span>${escapeHTML(page.nav)}</span></button>`;
     }
 
-    function wikiBeeTitle(section) {
-      const titles = {
-        overview: 'Wiki Bees Overview',
-        description: 'Bee Description',
-        families: 'Bee Families',
-        images: 'Image Notes'
-      };
-      return titles[section] || titles.overview;
-    }
-
-    function renderWikiBeeMain(section) {
-      if (section === 'description') {
-        return renderMarkdown(parsePlaceholders(appState.wikiBees.description.markdown || wikiBeeDescriptionFallback));
-      }
-      if (section === 'families') {
-        return renderMarkdown(parsePlaceholders(appState.wikiBees.families.markdown || wikiBeeFamiliesFallback));
-      }
-      if (section === 'images') {
-        return renderMarkdown(parsePlaceholders(`# Image Notes\n\nImages in this wiki are referenced from a local folder. This keeps exported Backpack state small and makes the page easier to maintain.\n\n- Worker image: \`{{WIKI_BEE_WORKER_IMAGE}}\`\n- Hive image: \`{{WIKI_BEE_HIVE_IMAGE}}\`\n\nUse the right column to inspect the themed image viewer and its footnotes.`));
-      }
+    function renderWikiBeePage(page) {
       return `
-        <div class="bp-demo-callout">
-          <h3>Medium template pattern</h3>
-          <p>This template demonstrates wiki controls, Markdown sources, copyable examples, and a local image viewer.</p>
+        <header class="bp-wiki-page-header">
+          <p class="bp-wiki-eyebrow">Bee Wiki · ${escapeHTML(page.nav)}</p>
+          <h1>${escapeHTML(page.title)}</h1>
+          <p>${escapeHTML(page.description)}</p>
+        </header>
+        ${page.sections.map(section => `
+          <section class="bp-wiki-md-section">
+            <div class="bp-wiki-section-heading">
+              <h2>${escapeHTML(section.title)}</h2>
+              <span>${escapeHTML(section.fileName)}</span>
+            </div>
+            ${renderMarkdown(parsePlaceholders(getWikiBeeMarkdown(section.sourceId, section.fallback)))}
+            <p class="bp-wiki-source-strip">Source: ${escapeHTML(getWikiBeeSource(section.sourceId))}</p>
+          </section>
+        `).join('')}
+      `;
+    }
+
+    function renderWikiBeeAside(page) {
+      const sideMarkdown = getWikiBeeMarkdown(page.sidecar.sourceId, page.sidecar.fallback);
+      return `
+        <div class="bp-window bp-wiki-infobox">
+          <div class="bp-window-titlebar">
+            <span class="bp-window-control" aria-hidden="true"></span>
+            <div class="bp-window-lines">Wiki image</div>
+            <span class="bp-window-control" aria-hidden="true"></span>
+          </div>
+          <div class="bp-window-body bp-wiki-image-body">
+            <figure class="bp-wiki-image-figure">
+              <img src="${escapeHTML(getWikiBeeImageSource(page))}" alt="${escapeHTML(page.image.alt)}" />
+              <figcaption>${escapeHTML(page.image.caption)}</figcaption>
+            </figure>
+            <p class="bp-wiki-footnote">${escapeHTML(getWikiBeeImageStatus(page))}</p>
+            <label class="bp-wiki-upload bp-wiki-upload-small">Upload page image<input id="bpWikiCurrentImageFile" type="file" accept="image/*,.svg" /></label>
+          </div>
         </div>
-        ${renderMarkdown(parsePlaceholders(`# Wiki Bees Overview
 
-This tab is a custom-page test for **{{PROJECT_NAME}}**. It combines several reusable Backpack ideas:
-
-- A left control/index column.
-- A main Markdown reading column.
-- A right reference column with copyable code and local images.
-- CSS Museum examples such as callouts, themed buttons, and local figure blocks.
-
-## What this proves
-
-A future custom page should not need a large one-off implementation every time. Most custom pages can be described with a file list, a few sections, optional snippets, and optional local images.
-
-## Local file workflow
-
-Save long text as Markdown in the local content folder, then let the tab fetch it:
-
-- \`{{WIKI_BEE_DESCRIPTION}}\`
-- \`{{WIKI_BEE_FAMILIES}}\`
-
-Images stay in a local image folder instead of being embedded in exported state.`))}
-        <button type="button" class="bp-demo-button">Museum-style action button</button>
+        <div class="bp-card bp-wiki-side-card">
+          <h3>${escapeHTML(page.sidecar.title)}</h3>
+          <div class="bp-markdown bp-wiki-side-markdown">
+            ${renderMarkdown(parsePlaceholders(sideMarkdown))}
+          </div>
+          <p class="bp-wiki-source-strip">${escapeHTML(page.sidecar.fileName)} · ${escapeHTML(getWikiBeeSource(page.sidecar.sourceId))}</p>
+          <label class="bp-wiki-upload bp-wiki-upload-small">Upload side note<input id="bpWikiCurrentSidebarFile" type="file" accept=".md,.markdown,text/markdown,text/plain" /></label>
+        </div>
       `;
     }
 
     function bindWikiBees() {
-      $$('[data-wiki-section]').forEach(button => {
+      $$('[data-wiki-page]').forEach(button => {
         button.addEventListener('click', () => {
-          appState.wikiBees.activeSection = button.dataset.wikiSection;
+          appState.wikiBees.activePage = button.dataset.wikiPage;
+          appState.wikiBees.activeSection = button.dataset.wikiPage; // Legacy export compatibility.
           saveState();
           renderApp();
         });
       });
-      $('[data-wiki-action="fetch"]')?.addEventListener('click', loadWikiBeeFiles);
-      $('#bpWikiDescriptionFile')?.addEventListener('change', async event => {
+      $('[data-wiki-action="demo"]')?.addEventListener('click', loadWikiBeeDemo);
+      $('#bpWikiBundleFiles')?.addEventListener('change', async event => {
+        await uploadWikiBeeMarkdownBundle(event.target.files);
+        event.target.value = '';
+      });
+      $('#bpWikiCurrentImageFile')?.addEventListener('change', async event => {
+        await uploadWikiBeeImageForPage(getWikiBeePage(), event.target.files?.[0]);
+        event.target.value = '';
+      });
+      $('#bpWikiCurrentSidebarFile')?.addEventListener('change', async event => {
+        const page = getWikiBeePage();
         const file = event.target.files?.[0];
-        if (!file) return;
-        await uploadContentSource('wikiBeeDescription', file);
-      });
-      $('#bpWikiFamiliesFile')?.addEventListener('change', async event => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        await uploadContentSource('wikiBeeFamilies', file);
-      });
-      $$('[data-wiki-copy]').forEach(button => {
-        button.addEventListener('click', () => {
-          const kind = button.dataset.wikiCopy;
-          const text = appState.wikiBees[kind]?.markdown || '';
-          copyText(text, `${kind} Markdown copied.`);
-        });
-      });
-      $$('[data-wiki-code]').forEach(button => {
-        button.addEventListener('click', () => {
-          const block = wikiBeeCodeBlocks[Number(button.dataset.wikiCode)];
-          copyText(parsePlaceholders(block.code), 'Wiki Bees code copied.');
-        });
-      });
-      $$('[data-wiki-image]').forEach(button => {
-        button.addEventListener('click', () => {
-          const delta = button.dataset.wikiImage === 'next' ? 1 : -1;
-          const count = wikiBeeImages.length;
-          appState.wikiBees.activeImage = (appState.wikiBees.activeImage + delta + count) % count;
+        if (await uploadWikiBeeMarkdownToSource(page.sidecar.sourceId, file)) {
           saveState();
           renderApp();
-        });
+          showToast(`${page.title} side note uploaded.`);
+        }
+        event.target.value = '';
       });
     }
+
 
     /***************************************************************************
      * Museum module
@@ -1725,20 +3374,20 @@ Images stay in a local image folder instead of being embedded in exported state.
 </section>`
       },
       {
-        title: 'Custom Wiki Tab Template',
-        description: 'A medium custom page pattern with controls, Markdown sources, snippets, and local images.',
+        title: 'Custom Medium Tab Template',
+        description: 'A medium custom page pattern with cascade navigation, Markdown fragments, and a wiki infobox.',
         html: `<!--
   CUSTOM WIKI TAB TEMPLATE
-  1. Add Markdown files to /content.
-  2. Register them in getContentSourceConfig().
-  3. Add a tab registry entry with a render function or config.
-  4. Use the shared content helpers for fetch/upload/cache.
-  5. Keep images as local files in /content/images.
+  1. Add page records to the wiki registry.
+  2. Put long text in separate Markdown fragments.
+  3. Map uploads by known filenames instead of fetch() checks.
+  4. Keep article controls outside the reading column.
+  5. Use an infobox for page images and side-note Markdown.
 -->
 <section class="bp-wiki-layout">
-  <aside class="bp-card">Wiki controls</aside>
-  <main class="bp-window bp-reading-window">Markdown reader</main>
-  <aside class="bp-card">Code and image references</aside>
+  <aside class="bp-card">Cascade wiki navigation</aside>
+  <main class="bp-window bp-reading-window">Title + Markdown fragments</main>
+  <aside class="bp-card">Image + side-note Markdown</aside>
 </section>`
       },
       {
@@ -1746,13 +3395,13 @@ Images stay in a local image folder instead of being embedded in exported state.
         description: 'How to add a simple content tab powered by Markdown and placeholders.',
         html: `<!--
   MARKDOWN SECTION TAB
-  1. Save a Markdown file next to the HTML, for example: bees.md
-  2. Add a tab registry entry: { id: "bees", label: "Bees", render: renderBees }
-  3. Fetch the Markdown file, parse placeholders, then render it through renderMarkdown().
+  1. Author a Markdown file, for example: notes.md.
+  2. Add a tab registry entry with render and bind functions.
+  3. Upload the Markdown file, parse placeholders, then render it through renderMarkdown().
   4. Keep raw HTML escaped unless the section is intentionally an HTML museum/source example.
 -->
 <section class="bp-card bp-markdown">
-  <!-- Rendered from bees.md -->
+  <!-- Rendered from uploaded Markdown -->
   {{MARKDOWN_SECTION_OUTPUT}}
 </section>`
       }
@@ -1813,13 +3462,12 @@ Images stay in a local image folder instead of being embedded in exported state.
       "NOTES_FILE",
       "BASIC_MD",
       "BASIC_HTML",
-      "WIKI_BEE_DESCRIPTION",
-      "WIKI_BEE_FAMILIES",
+      "WIKI_BEE_MD_BUNDLE",
+      "WIKI_BEE_SIDEBAR_SAMPLE",
       "WIKI_BEE_IMAGES",
       "WIKI_BEE_WORKER_IMAGE",
       "WIKI_BEE_HIVE_IMAGE",
-      "EXPORT_PATH",
-      "SERVER_PORT"
+      "EXPORT_PATH"
     ];
 
     function cleanPath(value) {
@@ -1846,13 +3494,12 @@ Images stay in a local image folder instead of being embedded in exported state.
       appState.placeholders.NOTES_FILE = joinPath(projectPath, 'content/notes.md');
       appState.placeholders.BASIC_MD = joinPath(projectPath, 'content/basic_newton.md');
       appState.placeholders.BASIC_HTML = joinPath(projectPath, 'content/basic_newton_quote.html');
-      appState.placeholders.WIKI_BEE_DESCRIPTION = joinPath(projectPath, 'content/Bee_Description.md');
-      appState.placeholders.WIKI_BEE_FAMILIES = joinPath(projectPath, 'content/Bee_Families.md');
+      appState.placeholders.WIKI_BEE_MD_BUNDLE = joinPath(projectPath, 'content/wiki');
+      appState.placeholders.WIKI_BEE_SIDEBAR_SAMPLE = joinPath(projectPath, 'content/wiki/index__side_note.md');
       appState.placeholders.WIKI_BEE_IMAGES = joinPath(projectPath, 'content/images');
       appState.placeholders.WIKI_BEE_WORKER_IMAGE = joinPath(projectPath, 'content/images/bee_worker.svg');
       appState.placeholders.WIKI_BEE_HIVE_IMAGE = joinPath(projectPath, 'content/images/bee_hive.svg');
       appState.placeholders.EXPORT_PATH = joinPath(projectPath, 'exports');
-      appState.placeholders.SERVER_PORT ||= '8000';
       saveState();
       renderApp();
       showToast('Path placeholders derived from PROJECT_PATH.');
@@ -1931,13 +3578,12 @@ Images stay in a local image folder instead of being embedded in exported state.
         NOTES_FILE: '/path/to/backpack/content/notes.md',
         BASIC_MD: '/path/to/backpack/content/basic_newton.md',
         BASIC_HTML: '/path/to/backpack/content/basic_newton_quote.html',
-        WIKI_BEE_DESCRIPTION: '/path/to/backpack/content/Bee_Description.md',
-        WIKI_BEE_FAMILIES: '/path/to/backpack/content/Bee_Families.md',
+        WIKI_BEE_MD_BUNDLE: '/path/to/backpack/content/wiki',
+        WIKI_BEE_SIDEBAR_SAMPLE: '/path/to/backpack/content/wiki/index__side_note.md',
         WIKI_BEE_IMAGES: '/path/to/backpack/content/images',
         WIKI_BEE_WORKER_IMAGE: '/path/to/backpack/content/images/bee_worker.svg',
         WIKI_BEE_HIVE_IMAGE: '/path/to/backpack/content/images/bee_hive.svg',
-        EXPORT_PATH: '/path/to/backpack/exports',
-        SERVER_PORT: '8000'
+        EXPORT_PATH: '/path/to/backpack/exports'
       };
       return hints[key] || 'Value';
     }
@@ -1996,6 +3642,24 @@ Images stay in a local image folder instead of being embedded in exported state.
      * Global bindings and boot
      ***************************************************************************/
     document.addEventListener('click', event => {
+      const promoteButton = event.target.closest('[data-promote-widget]');
+      if (promoteButton) {
+        const widgetId = promoteButton.dataset.promoteWidget;
+        const action = promoteButton.dataset.promoteAction || 'toggle';
+        const widget = promotedWidgets[widgetId];
+        if (!widget) return;
+        if (action === 'open-home') {
+          appState.activeTab = widget.homeTab;
+        } else if (action === 'clear') {
+          appState.ui.promotedWidget = '';
+        } else {
+          appState.ui.promotedWidget = isWidgetPromoted(widgetId) ? '' : widgetId;
+        }
+        saveState();
+        renderApp();
+        return;
+      }
+
       const tabButton = event.target.closest('[data-tab]');
       if (!tabButton) return;
       appState.activeTab = tabButton.dataset.tab;
@@ -2069,7 +3733,9 @@ Images stay in a local image folder instead of being embedded in exported state.
       event.target.value = '';
     });
 
+    setInterval(updateCalendarTimeRail, 30000);
+    window.addEventListener('resize', updateCalendarTimeRail);
+    if (!appState.bees.markdown && !appState.bees.quoteHtml) loadBeesFiles();
+    if (!appState.wikiBees.activePage) appState.wikiBees.activePage = appState.wikiBees.activeSection || 'index';
     renderApp();
     loadExternalNotes();
-    loadBeesFiles();
-    loadWikiBeeFiles();
