@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 260" role="img" aria-labelledby="title desc">
+  <title id="title">Hive diagram</title>
+  <desc id="desc">A simple local SVG illustration of a beehive and bees.</desc>
+  <rect width="420" height="260" fill="#efe7c2"/>
+  <g transform="translate(104 38)" stroke="#111" stroke-width="6" fill="#d49421">
+    <path d="M60 28h96c24 0 43 18 43 42H17c0-24 19-42 43-42z"/>
+    <path d="M30 69h156c21 0 38 17 38 38H-8c0-21 17-38 38-38z"/>
+    <path d="M12 107h192c24 0 44 20 44 44H-32c0-24 20-44 44-44z"/>
+    <path d="M-5 151h225c22 0 40 18 40 40H-45c0-22 18-40 40-40z"/>
+    <path d="M72 151c0-28 18-49 42-49s42 21 42 49z" fill="#3b2511"/>
+  </g>
+  <g stroke="#111" stroke-width="3" fill="#ffd45a">
+    <ellipse cx="56" cy="80" rx="15" ry="9"/><path d="M43 80h26"/><circle cx="36" cy="80" r="8"/>
+    <ellipse cx="344" cy="70" rx="15" ry="9"/><path d="M331 70h26"/><circle cx="364" cy="70" r="8"/>
+    <ellipse cx="355" cy="192" rx="15" ry="9"/><path d="M342 192h26"/><circle cx="375" cy="192" r="8"/>
+  </g>
+  <text x="20" y="32" font-family="monospace" font-size="20" font-weight="700">Hive Reference</text>
+</svg>

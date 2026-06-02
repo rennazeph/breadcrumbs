@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 260" role="img" aria-labelledby="title desc">
+  <title id="title">Worker bee diagram</title>
+  <desc id="desc">A simple local SVG illustration of a worker bee.</desc>
+  <rect width="420" height="260" fill="#f7f2d0"/>
+  <ellipse cx="165" cy="92" rx="72" ry="42" fill="#dcecff" stroke="#111" stroke-width="5" opacity="0.88"/>
+  <ellipse cx="252" cy="92" rx="72" ry="42" fill="#dcecff" stroke="#111" stroke-width="5" opacity="0.88"/>
+  <ellipse cx="212" cy="146" rx="105" ry="55" fill="#ffd45a" stroke="#111" stroke-width="6"/>
+  <path d="M150 103c25 36 25 64 0 95M204 92c24 48 24 80 0 108M259 101c18 35 18 65 0 90" fill="none" stroke="#111" stroke-width="13"/>
+  <circle cx="105" cy="142" r="42" fill="#ffd45a" stroke="#111" stroke-width="6"/>
+  <circle cx="92" cy="132" r="6" fill="#111"/>
+  <circle cx="116" cy="132" r="6" fill="#111"/>
+  <path d="M318 146l54-24-38 45z" fill="#111"/>
+  <path d="M103 184c-24 28-40 34-57 51M138 188c7 36 2 48-5 64M214 204c-7 31-2 44 17 58M272 190c21 25 41 32 71 42" stroke="#111" stroke-width="7" stroke-linecap="round"/>
+  <text x="20" y="32" font-family="monospace" font-size="20" font-weight="700">Worker Bee</text>
+</svg>

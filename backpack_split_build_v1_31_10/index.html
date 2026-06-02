@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Backpack 1.31.10</title>
+  <link rel="stylesheet" href="./css/backpack.css" />
+</head>
+<body>
+  <div class="bp-app">
+    <header class="bp-header">
+      <div class="bp-titleline">
+        <strong>BACKPACK V1.31.10</strong>
+        <span id="bpHeaderQuote">"Portable workspace: calendar, notes, snippets, templates, and state export"</span>
+        <div class="bp-actions" aria-label="Backpack actions">
+          <div class="bp-action-dropdown">
+            <button id="bpDataBtn" class="bp-action-wide" type="button" title="Open import/export menu" aria-label="Import and export" aria-expanded="false">Data ▾</button>
+            <div id="bpDataMenu" class="bp-action-menu" aria-label="Import and export menu" hidden>
+              <button id="bpExportBtn" type="button" title="Export full Backpack state" aria-label="Export full Backpack state">Export state</button>
+              <button id="bpImportBtn" type="button" title="Import full Backpack state" aria-label="Import full Backpack state">Import state</button>
+            </div>
+          </div>
+          <button id="bpThemeBtn" class="bp-action-wide" type="button" title="Cycle workspace theme" aria-label="Cycle workspace theme">Theme</button>
+          <button id="bpDisplayBtn" class="bp-action-wide" type="button" title="Show display settings" aria-label="Display settings" aria-pressed="false">Display</button>
+          <input id="bpImportFile" class="bp-hidden" type="file" accept="application/json,.json" />
+        </div>
+      </div>
+      <div id="bpDisplayMenu" class="bp-display-menu" aria-label="Display settings" hidden>
+        <button id="bpDarkBtn" type="button" aria-pressed="false">App: Dark</button>
+        <button id="bpReadBtn" type="button" aria-pressed="false">Reader: Light</button>
+        <button id="bpDensityBtn" type="button" aria-pressed="false">Density: Compact</button>
+        <button id="bpAccessibleBtn" type="button" aria-pressed="false">Access: Standard</button>
+      </div>
+      <div class="bp-header-row">
+        <nav id="bpTabs" class="bp-tabs" aria-label="Backpack sections"></nav>
+      </div>
+    </header>
+    <section id="bpPromotedShelf" class="bp-promoted-shelf" aria-live="polite"></section>
+    <main id="bpWorkspace" class="bp-workspace"></main>
+  </div>
+
+  <div id="bpToasts" class="bp-toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="./js/backpack.js" defer></script>
+</body>
+</html>
