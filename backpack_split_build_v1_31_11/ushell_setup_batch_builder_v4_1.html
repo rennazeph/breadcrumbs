@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ushell Setup Batch Builder v4.1</title>
+  <title>ushell Setup Batch Builder v4.1.1</title>
   <style>
     :root {
       color-scheme: dark;
@@ -122,7 +122,7 @@
       background-size: 240% 100%;
       background-clip: text;
       -webkit-background-clip: text;
-      animation: titleChroma 3.6s cubic-bezier(.18,.76,.2,1) both;
+      animation: titleChroma 2.15s cubic-bezier(.4,0,.2,1);
       text-shadow: none;
     }
 
@@ -658,9 +658,28 @@
     @keyframes holdBreathe { from { transform: scale(.94) rotate(-1deg); } to { transform: scale(1.08) rotate(1deg); } }
     @keyframes builderComplete { 0% { transform: scale(1); } 42% { transform: scale(1.22); box-shadow: 0 0 22px rgba(244,223,104,.34); } 100% { transform: scale(1); } }
     @keyframes titleChroma {
-      0% { background-position: 100% 0; filter: brightness(.95); }
-      45% { filter: brightness(1.2); }
-      100% { background-position: 0 0; filter: brightness(1.04); }
+      0% {
+        color: rgba(233,241,247,1);
+        background-position: 100% 0;
+        filter: brightness(1);
+      }
+      24% {
+        color: rgba(233,241,247,0);
+        filter: brightness(1.12);
+      }
+      46% {
+        color: rgba(233,241,247,0);
+        filter: brightness(1.2);
+      }
+      68% {
+        color: rgba(233,241,247,.28);
+        filter: brightness(1.1);
+      }
+      100% {
+        color: rgba(233,241,247,1);
+        background-position: 0 0;
+        filter: brightness(1);
+      }
     }
 
     @keyframes copyConfirm {
@@ -853,7 +872,7 @@
         </div>
         <div class="panel-body">
           <dl id="exitLegend" class="exit-grid"></dl>
-          <p class="version-footnote">ushell Setup Batch Builder · v4.1.0</p>
+          <p class="version-footnote">ushell Setup Batch Builder · v4.1.1</p>
         </div>
       </section>
     </div>
@@ -874,7 +893,7 @@
         programs: ["ShaderCompileWorker", "UnrealFrontEnd"]
       };
 
-      const APP_VERSION = "4.1.0";
+      const APP_VERSION = "4.1.1";
       const MAX_PROGRAMS = 6;
       const storageKey = "ushell-batch-builder-v4";
       const programPattern = /^[A-Za-z0-9_.-]+$/;
