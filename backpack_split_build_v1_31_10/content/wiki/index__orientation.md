@@ -1,5 +1,0 @@
-This page is a stress test for Template - Medium. The left column behaves as a cascade index; the center column renders the selected page as a title, description, and a sequence of Markdown fragments; the right column keeps a stable visual reference and a short secondary note. That structure is closer to a small wiki than a single article because each subtitle can be maintained as its own file.
-
-The current build does not try to fetch neighboring files. Instead, it ships with bundled demo text and lets the user upload Markdown files into the running page. That means the same HTML can be opened directly from disk, backed up as state, and moved without assuming a server. The tradeoff is that a large wiki needs a clear naming convention so uploaded files can be mapped to their intended slots.
-
-The file names shown in the source strips are intentionally verbose. They make testing easier: a writer can export or edit the fragments separately, then select several files at once using the bundle upload control.
