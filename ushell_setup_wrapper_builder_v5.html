@@ -1,0 +1,2745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ushell Setup Wrapper Builder v5.0</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --black: #07090b;
+      --black-2: #0a0d10;
+      --black-3: #0e1318;
+      --line: #1769ad;
+      --line-soft: #17354e;
+      --cyan: #36e7f1;
+      --cyan-soft: #91f6fb;
+      --green: #56e578;
+      --yellow: #f4df68;
+      --red: #ff6b6f;
+      --blue: #4c94ff;
+      --magenta: #d94bd8;
+      --white: #edf5fa;
+      --muted: #8ba0b5;
+      --dim: #506171;
+      --focus: 0 0 0 2px rgba(54, 231, 241, .24);
+      --mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      overflow: hidden;
+      color: var(--white);
+      background:
+        linear-gradient(rgba(8, 11, 14, .965), rgba(4, 6, 8, .985)),
+        repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.018) 4px);
+      font: 13px/1.38 var(--mono);
+    }
+
+    body.legend-open { overflow: hidden; }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      width: min(1460px, calc(100% - 20px));
+      height: 100dvh;
+      margin: 0 auto;
+      padding: 10px 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .masthead {
+      min-height: 49px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .title-block {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas:
+        "eyebrow eyebrow"
+        "title subtitle";
+      align-items: baseline;
+      column-gap: 16px;
+    }
+
+    .eyebrow {
+      grid-area: eyebrow;
+      margin: 0 0 1px;
+      color: var(--cyan);
+      font-size: 11px;
+      letter-spacing: .06em;
+    }
+
+    .app-title {
+      grid-area: title;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      color: var(--white);
+      background: none;
+      cursor: pointer;
+      font: 700 clamp(1.45rem, 2.6vw, 2.2rem)/1 var(--mono);
+      letter-spacing: -.045em;
+      text-align: left;
+      white-space: nowrap;
+      transition: text-shadow .15s, transform .12s;
+    }
+
+    .app-title:hover {
+      text-shadow: 0 0 14px rgba(54,231,241,.2);
+    }
+
+    .app-title:active { transform: translateY(1px); }
+
+    .app-title.chromatic {
+      color: transparent;
+      background:
+        linear-gradient(90deg,
+          #44f45f 0%, #44f45f 12%,
+          #f2e86d 20%,
+          #4e9cff 34%,
+          #db45d4 47%,
+          #42e9ef 60%,
+          #ff646b 73%,
+          #58ef74 87%,
+          #f2e86d 100%);
+      background-size: 240% 100%;
+      background-clip: text;
+      -webkit-background-clip: text;
+      animation: titleChroma 2.15s cubic-bezier(.4,0,.2,1);
+      text-shadow: none;
+    }
+
+    .subtitle {
+      grid-area: subtitle;
+      min-width: 0;
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-tools {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+    }
+
+    .platform-switch {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid #203a4e;
+      background: #070a0c;
+    }
+
+    .platform-button {
+      min-height: 28px;
+      padding: 3px 9px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+      transition: color .12s, border-color .12s, background .12s;
+    }
+
+    .platform-button:hover {
+      color: var(--white);
+      border-color: #28516d;
+      background: rgba(54,231,241,.04);
+    }
+
+    .platform-button.active {
+      border-color: var(--cyan);
+      color: #031012;
+      background: var(--cyan);
+    }
+
+    .platform-button:focus-visible {
+      outline: none;
+      box-shadow: var(--focus);
+    }
+
+    .builder-mark {
+      position: relative;
+      isolation: isolate;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 1px solid var(--line-soft);
+      border-radius: 2px;
+      background: var(--black-2);
+      cursor: pointer;
+      line-height: 1;
+      overflow: visible;
+      transition: border-color .12s, background .12s, transform .1s;
+    }
+
+    .builder-icon {
+      position: relative;
+      z-index: 2;
+      display: inline-block;
+      font-size: 16px;
+      transform-origin: 50% 75%;
+    }
+
+    .builder-mark::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: -2px;
+      border: 1px solid var(--cyan);
+      border-radius: 3px;
+      opacity: 0;
+      transform: scale(.72);
+      pointer-events: none;
+    }
+
+    .builder-mark::after {
+      content: "";
+      position: absolute;
+      z-index: 3;
+      left: 2px;
+      right: 2px;
+      bottom: -5px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), var(--green), var(--yellow), var(--magenta));
+      transform: scaleX(0);
+      transform-origin: left;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .builder-mark:hover {
+      border-color: var(--cyan);
+      background: #0b171b;
+    }
+
+    .builder-mark.holding::before {
+      animation: holdInflate 5s linear forwards;
+    }
+
+    .builder-mark.holding::after {
+      opacity: 1;
+      animation: holdProgress 5s linear forwards;
+    }
+
+    .builder-mark.holding .builder-icon {
+      animation: holdBreathe .8s ease-in-out infinite alternate;
+    }
+
+    .builder-mark.fidget { animation: builderFidget .38s ease-out; }
+    .builder-mark.hold-complete { animation: builderComplete .5s ease-out; }
+
+    .builder-mark:focus-visible,
+    .app-title:focus-visible,
+    .terminal-button:focus-visible,
+    .icon-button:focus-visible,
+    input:focus-visible {
+      outline: none;
+      box-shadow: var(--focus);
+    }
+
+    .terminal-panel {
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid var(--line-soft);
+      border-top-color: var(--line);
+      background: rgba(6, 9, 11, .92);
+      box-shadow: inset 0 1px 0 rgba(76,148,255,.07);
+    }
+
+    .panel-head {
+      min-height: 31px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 9px;
+      padding: 4px 9px 4px 11px;
+      border-bottom: 1px solid var(--line-soft);
+      background: linear-gradient(90deg, rgba(23,105,173,.15), transparent 54%);
+    }
+
+    .panel-title {
+      min-width: 0;
+      margin: 0;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .panel-title::before {
+      content: "--\00a0";
+      color: var(--blue);
+    }
+
+    .panel-body { min-width: 0; min-height: 0; padding: 9px 11px; }
+
+    .paths-panel .panel-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas:
+        "workspace project"
+        "confirm confirm";
+      gap: 7px 12px;
+      padding-block: 8px;
+    }
+
+    .workspace-field { grid-area: workspace; }
+    .project-field { grid-area: project; }
+
+    .field { min-width: 0; display: grid; gap: 4px; }
+
+    .field-line {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    label { color: var(--cyan-soft); font-weight: 700; white-space: nowrap; }
+    .required { color: var(--yellow); font-weight: 400; }
+
+    .field-meta, .hint {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 400;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      min-width: 0;
+      height: 33px;
+      padding: 6px 9px;
+      border: 1px solid #243b4c;
+      border-radius: 1px;
+      outline: none;
+      color: var(--white);
+      background: #050709;
+      caret-color: var(--cyan);
+      transition: border-color .12s, background .12s;
+    }
+
+    input[type="text"]::placeholder { color: #4c5b68; }
+    input[type="text"]:hover { border-color: #315c78; }
+    input[type="text"]:focus { border-color: var(--cyan); background: #070d10; }
+    input.invalid { border-color: var(--red); box-shadow: 0 0 0 2px rgba(255,107,111,.12); }
+
+    .path-confirmation {
+      grid-area: confirm;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+      gap: 10px;
+      padding-top: 6px;
+      border-top: 1px dashed #213647;
+    }
+
+    .confirm-line {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 7px;
+      align-items: baseline;
+    }
+
+    .confirm-key { color: var(--muted); white-space: nowrap; }
+    .confirm-value { min-width: 0; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .confirm-value.ready { color: var(--green); }
+    .confirm-value.info { color: var(--cyan-soft); }
+    .confirm-value.warn { color: var(--yellow); }
+
+    .unlock-message {
+      grid-column: 1 / -1;
+      margin: -1px 0 0;
+      padding-top: 6px;
+      border-top: 1px dashed #213647;
+      color: var(--yellow);
+      font-size: 11px;
+    }
+
+    .unlock-message::before { content: "[ waiting ] "; }
+
+    .workspace-grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(390px, .82fr) minmax(0, 1.18fr);
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(7px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .workspace-grid.is-visible { opacity: 1; transform: none; }
+
+    .workspace-grid.is-visible .control-panel {
+      animation: discoverPanel .26s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .workspace-grid.is-visible .preview-panel {
+      animation: discoverPanel .28s .07s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .control-panel, .preview-panel {
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .control-panel .panel-body {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .pipeline-rail {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 4px;
+    }
+
+    .rail-node {
+      min-width: 0;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      padding: 3px 5px;
+      border: 1px solid #243b4c;
+      background: #070a0c;
+      color: var(--dim);
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .rail-node.on { border-color: #19818b; color: var(--cyan-soft); background: rgba(54,231,241,.045); }
+    .rail-node.required-node { border-color: #2973ad; color: var(--blue); }
+    .rail-node.off { border-style: dashed; color: #48545e; }
+
+    .checks {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 6px;
+    }
+
+    .check {
+      min-width: 0;
+      min-height: 35px;
+      display: grid;
+      grid-template-columns: 17px minmax(0, 1fr);
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border: 1px solid #132635;
+      background: rgba(255,255,255,.008);
+      cursor: pointer;
+    }
+
+    .check:hover { border-color: #22506b; background: rgba(54,231,241,.025); }
+    .check input { margin: 0; accent-color: var(--cyan); }
+
+    .check.source-github {
+      border-color: #4a315f;
+      background:
+        linear-gradient(90deg, rgba(184,104,255,.095), rgba(184,104,255,.025));
+    }
+
+    .check.source-github:hover {
+      border-color: #8251a1;
+      background:
+        linear-gradient(90deg, rgba(184,104,255,.15), rgba(184,104,255,.045));
+    }
+
+    .check.source-github:has(input:not(:checked)) {
+      border-color: #2c2632;
+      background: rgba(184,104,255,.025);
+    }
+
+    .check.source-perforce {
+      border-color: #234e70;
+      background:
+        linear-gradient(90deg, rgba(70,163,255,.105), rgba(70,163,255,.025));
+    }
+
+    .check.source-perforce:hover {
+      border-color: #397db1;
+      background:
+        linear-gradient(90deg, rgba(70,163,255,.17), rgba(70,163,255,.05));
+    }
+
+    .check.source-perforce:has(input:not(:checked)) {
+      border-color: #1e2e3c;
+      background: rgba(70,163,255,.025);
+    }
+
+    .check.source-github code { color: #d9a5ff; }
+    .check.source-perforce code { color: #8bc8ff; }
+
+    .posix-session {
+      grid-column: span 2;
+      grid-template-columns: 18px minmax(0, 1fr);
+      border-color: #27745a;
+      background: linear-gradient(90deg, rgba(86,229,120,.09), rgba(54,231,241,.025));
+      cursor: default;
+    }
+
+    .posix-session:hover {
+      border-color: #2e8b68;
+      background: linear-gradient(90deg, rgba(86,229,120,.11), rgba(54,231,241,.035));
+    }
+
+    .posix-session-mark {
+      color: var(--green);
+      text-align: center;
+      font-size: 9px;
+    }
+
+    .posix-session code { color: var(--green); }
+
+    .check-copy {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: baseline;
+      gap: 5px;
+    }
+
+    .check strong { min-width: 0; color: var(--white); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .check code { color: var(--cyan-soft); font: 9px/1 var(--mono); white-space: nowrap; }
+
+    .programs-block {
+      min-height: 0;
+      padding-top: 7px;
+      border-top: 1px dashed #213647;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto auto;
+      gap: 5px;
+      overflow: hidden;
+    }
+
+    .section-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .section-label { color: var(--cyan); font-weight: 700; }
+
+    .program-list {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-content: start;
+      gap: 4px;
+      margin: 0;
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #285a78 #07090b;
+    }
+
+    .program-row {
+      min-width: 0;
+      min-height: 30px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) 24px 24px 24px;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 3px 2px 5px;
+      border: 1px solid #21384a;
+      background: #070a0c;
+    }
+
+    .program-index {
+      align-self: stretch;
+      display: grid;
+      place-items: center;
+      border-right: 1px solid #1c3445;
+      color: var(--blue);
+      font-size: 9px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .program-name {
+      min-width: 0;
+      padding-left: 5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--green);
+      font-size: 11px;
+    }
+
+    .icon-button, .terminal-button {
+      border: 1px solid #2b465a;
+      border-radius: 1px;
+      background: #0a1015;
+      cursor: pointer;
+      transition: border-color .12s, background .12s, color .12s;
+    }
+
+    .icon-button { width: 24px; height: 24px; padding: 0; color: var(--muted); }
+    .icon-button:hover, .terminal-button:hover { border-color: var(--cyan); background: #0c181d; color: var(--white); }
+    .icon-button:disabled { opacity: .25; cursor: default; border-color: #26323a; }
+    .icon-button.remove:hover { border-color: var(--red); color: var(--red); }
+
+    .add-row { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; }
+    .add-row input { height: 29px; }
+
+    .terminal-button {
+      min-height: 29px;
+      padding: 4px 10px;
+      color: var(--cyan-soft);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .terminal-button.primary { border-color: var(--cyan); color: #051012; background: var(--cyan); }
+    .terminal-button.primary:hover { color: #020708; background: #79f4fa; }
+
+    .terminal-button.copy {
+      min-width: 68px;
+      border-color: #278d49;
+      color: var(--green);
+    }
+
+    .terminal-button.copy.copied {
+      border-color: var(--green);
+      color: #031008;
+      background: var(--green);
+      box-shadow: 0 0 0 1px rgba(85,225,126,.28), 0 0 18px rgba(85,225,126,.2);
+      animation: copyConfirm .34s cubic-bezier(.2,.9,.28,1.2);
+    }
+
+    .terminal-button:disabled { opacity: .32; cursor: default; }
+
+    .status { min-height: 15px; margin: 0; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status.good { color: var(--green); }
+    .status.warn { color: var(--yellow); }
+    .status.bad { color: var(--red); }
+
+    .preview-toolbar { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; }
+
+    .preview-panel .panel-head { padding-right: 7px; }
+    .preview-panel .panel-body {
+      display: grid;
+      grid-template-rows: 16px minmax(0, 1fr) 15px;
+      gap: 5px;
+      overflow: hidden;
+    }
+
+    .preview-frame { min-height: 0; overflow: hidden; border: 1px solid #183f5f; background: #040607; }
+
+    pre {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      overflow: auto;
+      padding: 10px;
+      color: #d9e8f1;
+      font: 11px/1.45 var(--mono);
+      tab-size: 2;
+      white-space: pre;
+      scrollbar-width: thin;
+      scrollbar-color: #285a78 #07090b;
+    }
+
+    pre.empty { color: var(--dim); }
+    code { color: var(--cyan-soft); font: inherit; }
+    .micro-note { margin: 0; color: var(--dim); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .exit-overlay {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0, 3, 5, .76);
+      opacity: 0;
+      backdrop-filter: blur(3px);
+      transition: opacity .16s ease;
+    }
+
+    .exit-overlay.open { opacity: 1; }
+
+    .exit-modal {
+      width: min(680px, 100%);
+      max-height: min(78vh, 690px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+      border-color: #715f20;
+      transform: translateY(8px) scale(.985);
+      transition: transform .16s ease;
+    }
+
+    .exit-overlay.open .exit-modal { transform: none; }
+    .exit-modal .panel-head { border-bottom-color: #524619; background: linear-gradient(90deg, rgba(244,223,104,.1), transparent 58%); }
+    .exit-modal .panel-title { color: var(--yellow); }
+    .exit-modal .panel-body { overflow: auto; padding: 12px 14px; }
+
+    .exit-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 14px; margin: 0; }
+    .exit-grid dt { color: var(--yellow); font-weight: 700; }
+    .exit-grid dd { margin: 0; color: var(--muted); }
+
+    .legend-preferences {
+      display: grid;
+      gap: 7px;
+      margin-top: 13px;
+      padding-top: 11px;
+      border-top: 1px dashed #514819;
+    }
+
+    .legend-preferences-title {
+      color: var(--yellow);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .legend-check {
+      min-height: 34px;
+      border-color: #34424c;
+      background: rgba(255,255,255,.018);
+    }
+
+    .legend-check .check-copy {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .legend-preferences-note {
+      margin: 0;
+      color: var(--dim);
+      font-size: 9px;
+    }
+
+    .version-footnote {
+      margin: 11px 0 0;
+      color: #8d8562;
+      font-size: 9px;
+      text-align: right;
+    }
+
+    .modal-close {
+      width: 26px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid #6a5920;
+      background: #100f08;
+      color: var(--yellow);
+      cursor: pointer;
+    }
+
+    @keyframes discoverPanel {
+      from { opacity: 0; transform: translateY(7px); filter: saturate(.45); }
+      to { opacity: 1; transform: none; filter: none; }
+    }
+
+    @keyframes builderFidget {
+      0% { transform: translateX(0) rotate(0); }
+      20% { transform: translateX(-2px) rotate(-4deg); }
+      42% { transform: translateX(2px) rotate(4deg); }
+      64% { transform: translateX(-1px) rotate(-2deg); }
+      100% { transform: translateX(0) rotate(0); }
+    }
+
+    @keyframes holdInflate {
+      0% { opacity: .18; transform: scale(.72); box-shadow: 0 0 0 rgba(54,231,241,0); }
+      72% { opacity: .8; }
+      100% { opacity: 1; transform: scale(1.72); box-shadow: 0 0 24px rgba(54,231,241,.28); border-color: var(--yellow); }
+    }
+
+    @keyframes holdProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes holdBreathe { from { transform: scale(.94) rotate(-1deg); } to { transform: scale(1.08) rotate(1deg); } }
+    @keyframes builderComplete { 0% { transform: scale(1); } 42% { transform: scale(1.22); box-shadow: 0 0 22px rgba(244,223,104,.34); } 100% { transform: scale(1); } }
+    @keyframes titleChroma {
+      0% {
+        color: rgba(233,241,247,1);
+        background-position: 100% 0;
+        filter: brightness(1);
+      }
+      24% {
+        color: rgba(233,241,247,0);
+        filter: brightness(1.12);
+      }
+      46% {
+        color: rgba(233,241,247,0);
+        filter: brightness(1.2);
+      }
+      68% {
+        color: rgba(233,241,247,.28);
+        filter: brightness(1.1);
+      }
+      100% {
+        color: rgba(233,241,247,1);
+        background-position: 0 0;
+        filter: brightness(1);
+      }
+    }
+
+    @keyframes copyConfirm {
+      0% { transform: scale(1); }
+      42% { transform: scale(.92); }
+      72% { transform: scale(1.07); }
+      100% { transform: scale(1); }
+    }
+
+    @media (max-height: 720px) and (min-width: 841px) {
+      .app { padding-block: 6px; gap: 6px; }
+      .masthead { min-height: 42px; }
+      .app-title { font-size: 1.55rem; }
+      .paths-panel .panel-body { padding-block: 6px; }
+      .field-meta { display: none; }
+      .check { min-height: 31px; }
+      .control-panel .panel-body { gap: 6px; }
+    }
+
+    @media (max-width: 840px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100dvh; overflow: visible; grid-template-rows: auto auto auto; }
+      .title-block { grid-template-columns: 1fr; grid-template-areas: "eyebrow" "title" "subtitle"; }
+      .app-title { white-space: normal; }
+      .subtitle { margin-top: 3px; }
+      .paths-panel .panel-body { grid-template-columns: 1fr; grid-template-areas: "workspace" "project" "confirm"; }
+      .path-confirmation { grid-template-columns: 1fr; }
+      .workspace-grid { grid-template-columns: 1fr; }
+      .control-panel, .preview-panel { height: auto; min-height: 430px; }
+      .preview-panel { min-height: 520px; }
+    }
+
+    @media (max-width: 540px) {
+      .app { width: min(100% - 10px, 1460px); }
+      .masthead { align-items: flex-start; }
+      .header-tools { align-items: flex-start; }
+      .platform-switch { grid-template-columns: 1fr; }
+      .platform-button { min-width: 70px; }
+      .checks { grid-template-columns: 1fr; }
+      .posix-session { grid-column: auto; }
+      .pipeline-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .program-list { grid-template-columns: 1fr; }
+      .panel-head { align-items: flex-start; }
+      .preview-panel .panel-head { display: grid; }
+      .preview-toolbar { flex-wrap: wrap; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="app">
+    <header class="masthead">
+      <div class="title-block">
+        <p class="eyebrow">-- unreal.core / local utility</p>
+        <button id="titleEffect" class="app-title" type="button" title="Replay ushell colour sweep">
+          ushell Setup Wrapper Builder
+        </button>
+        <p id="subtitle" class="subtitle">Resolve project → select pipeline → copy guarded wrapper.</p>
+      </div>
+
+      <div class="header-tools">
+        <div id="platformSwitch" class="platform-switch" role="group" aria-label="Target platform">
+          <button class="platform-button active" type="button" data-platform="windows" aria-pressed="true">Windows</button>
+          <button class="platform-button" type="button" data-platform="linux" aria-pressed="false">Linux</button>
+          <button class="platform-button" type="button" data-platform="macos" aria-pressed="false">macOS</button>
+        </div>
+
+        <button
+          id="builderMark"
+          class="builder-mark"
+          type="button"
+          aria-label="Hold for five seconds to open the exit-code legend"
+          aria-pressed="false"
+          title="Hold for 5 seconds: exit-code legend">
+          <span class="builder-icon" aria-hidden="true">🏗</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="terminal-panel paths-panel" aria-labelledby="pathsTitle">
+      <div class="panel-head">
+        <h2 id="pathsTitle" class="panel-title">Workspace and project</h2>
+      </div>
+      <div class="panel-body">
+        <div class="field workspace-field">
+          <div class="field-line">
+            <label for="workspace">Workspace root <span class="required">[required]</span></label>
+            <span id="workspaceMeta" class="field-meta">setup.bat + Engine\Extras\ushell\ushell.bat</span>
+          </div>
+          <input id="workspace" type="text" spellcheck="false" autocomplete="off" placeholder="C:\git\UnrealEngine">
+        </div>
+
+        <div class="field project-field">
+          <div class="field-line">
+            <label for="project">Project path <span class="hint">[optional]</span></label>
+            <span class="field-meta">folder → folder-name.uproject</span>
+          </div>
+          <input id="project" type="text" spellcheck="false" autocomplete="off" placeholder="C:\git\Samples\Games\Lyra or ...\Lyra.uproject">
+        </div>
+
+        <div class="path-confirmation" aria-live="polite">
+          <div class="confirm-line">
+            <span class="confirm-key">workspace</span>
+            <span id="workspaceConfirmation" class="confirm-value">[waiting for input]</span>
+          </div>
+          <div class="confirm-line">
+            <span class="confirm-key">project</span>
+            <span id="projectConfirmation" class="confirm-value">[none selected]</span>
+          </div>
+        </div>
+
+        <p id="unlockMessage" class="unlock-message">Enter the workspace root to discover the pipeline.</p>
+      </div>
+    </section>
+
+    <div id="progressiveArea" class="workspace-grid" hidden>
+      <section class="terminal-panel control-panel" aria-labelledby="pipelineTitle">
+        <div class="panel-head">
+          <h2 id="pipelineTitle" class="panel-title">Pipeline configuration</h2>
+        </div>
+        <div class="panel-body">
+          <div id="pipelineRail" class="pipeline-rail" aria-label="Selected pipeline">
+            <div class="rail-node" data-stage="setup">setup</div>
+            <div class="rail-node required-node" data-stage="ushell">ushell</div>
+            <div class="rail-node" data-stage="sync">p4 sync</div>
+            <div class="rail-node" data-stage="editor">editor</div>
+            <div class="rail-node" data-stage="programs">programs</div>
+            <div class="rail-node" data-stage="run">run</div>
+          </div>
+
+          <div class="checks">
+            <label class="check source-github">
+              <input id="runSetup" type="checkbox" checked>
+              <span class="check-copy"><strong id="setupLabel">Run setup.bat</strong><code>[GitHub builds]</code></span>
+            </label>
+            <label class="check source-perforce">
+              <input id="runSync" type="checkbox" checked>
+              <span class="check-copy"><strong>Sync project</strong><code>[Perforce builds]</code></span>
+            </label>
+            <label class="check">
+              <input id="buildEditor" type="checkbox" checked>
+              <span class="check-copy"><strong>Build editor</strong><code>.build editor</code></span>
+            </label>
+            <label class="check">
+              <input id="runEditor" type="checkbox" checked>
+              <span class="check-copy"><strong>Run editor</strong><code>.run editor</code></span>
+            </label>
+            <label id="pauseCard" class="check windows-option">
+              <input id="pauseFailure" type="checkbox" checked>
+              <span class="check-copy"><strong>Pause on failure</strong><code>wrapper</code></span>
+            </label>
+            <label id="keepOpenCard" class="check windows-option">
+              <input id="keepOpen" type="checkbox">
+              <span class="check-copy"><strong>Keep ushell open</strong><code>.zzz → interactive cmd /k</code></span>
+            </label>
+            <div id="posixSessionCard" class="check posix-session" hidden>
+              <span class="posix-session-mark" aria-hidden="true">◆</span>
+              <span class="check-copy">
+                <strong>Interactive ushell session</strong>
+                <code>automatic after launch</code>
+              </span>
+            </div>
+          </div>
+
+          <div class="programs-block">
+            <div class="section-line">
+              <span class="section-label">-- program build order</span>
+              <span id="programCount" class="field-meta">0 / 6 targets</span>
+            </div>
+            <div id="programList" class="program-list" aria-live="polite"></div>
+            <div class="add-row">
+              <input id="programInput" type="text" spellcheck="false" autocomplete="off" placeholder="Add program name">
+              <button id="addProgram" class="terminal-button" type="button">+ add</button>
+            </div>
+            <p id="programStatus" class="status" role="status"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="terminal-panel preview-panel" aria-labelledby="batchTitle">
+        <div class="panel-head">
+          <h2 id="batchTitle" class="panel-title">Generated Windows batch</h2>
+          <div class="preview-toolbar">
+            <button id="generate" class="terminal-button primary" type="button">generate</button>
+            <button id="copy" class="terminal-button copy" type="button" disabled>copy batch</button>
+            <button id="reset" class="terminal-button" type="button">reset</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <p id="status" class="status" role="status"></p>
+          <div class="preview-frame">
+            <pre id="preview" class="empty">// workspace accepted
+// configure the pipeline, then generate</pre>
+          </div>
+          <p id="runNote" class="micro-note">Save as <code>SetupUshell.bat</code> · double-click to run.</p>
+        </div>
+      </section>
+    </div>
+
+    <div id="exitPanel" class="exit-overlay" hidden>
+      <section class="terminal-panel exit-modal" role="dialog" aria-modal="true" aria-labelledby="exitTitle">
+        <div class="panel-head">
+          <h2 id="exitTitle" class="panel-title">Wrapper exit-code legend</h2>
+          <button id="exitClose" class="modal-close" type="button" aria-label="Close exit-code legend">×</button>
+        </div>
+        <div class="panel-body">
+          <dl id="exitLegend" class="exit-grid"></dl>
+
+          <div class="legend-preferences">
+            <span class="legend-preferences-title">-- local utility preferences</span>
+            <label class="check legend-check">
+              <input id="remember" type="checkbox">
+              <span class="check-copy">
+                <strong>Remember locally</strong>
+                <code>browser storage</code>
+              </span>
+            </label>
+            <p class="legend-preferences-note">
+              Stores the captured paths and pipeline choices only in this browser.
+            </p>
+          </div>
+
+          <p id="versionFootnote" class="version-footnote">ushell Setup Wrapper Builder · v5.0.0</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+(() => {
+      "use strict";
+
+      const APP_VERSION = "5.0.0";
+      const MAX_PROGRAMS = 6;
+      const storageKey = "ushell-wrapper-builder-v5";
+      const programPattern = /^[A-Za-z0-9_.-]+$/;
+
+      const platformProfiles = {
+        windows: {
+          label: "Windows",
+          workspacePlaceholder: "C:\\git\\UnrealEngine",
+          projectPlaceholder: "C:\\git\\Samples\\Games\\Lyra or ...\\Lyra.uproject",
+          workspaceMeta: "setup.bat + Engine\\Extras\\ushell\\ushell.bat",
+          setupLabel: "Run setup.bat",
+          outputTitle: "Generated Windows batch",
+          copyLabel: "copy batch",
+          filename: "SetupUshell.bat",
+          runNote: "Save as SetupUshell.bat · double-click to run.",
+          lineEnding: "\r\n"
+        },
+        linux: {
+          label: "Linux",
+          workspacePlaceholder: "/home/user/git/UnrealEngine",
+          projectPlaceholder: "/home/user/git/Samples/Games/Lyra or .../Lyra.uproject",
+          workspaceMeta: "Setup.sh + Engine/Extras/ushell/ushell.sh",
+          setupLabel: "Run Setup.sh",
+          outputTitle: "Generated Linux wrapper",
+          copyLabel: "copy shell script",
+          filename: "SetupUshell.sh",
+          runNote: "Save with LF as SetupUshell.sh · run: sh SetupUshell.sh",
+          lineEnding: "\n"
+        },
+        macos: {
+          label: "macOS",
+          workspacePlaceholder: "/Users/user/git/UnrealEngine",
+          projectPlaceholder: "/Users/user/git/Samples/Games/Lyra or .../Lyra.uproject",
+          workspaceMeta: "Setup.command / Setup.sh + Engine/Extras/ushell/ushell.sh",
+          setupLabel: "Run Setup.command",
+          outputTitle: "Generated macOS wrapper",
+          copyLabel: "copy command script",
+          filename: "SetupUshell.command",
+          runNote: "Save with LF as SetupUshell.command · run: sh SetupUshell.command",
+          lineEnding: "\n"
+        }
+      };
+
+      const defaults = {
+        platform: "windows",
+        workspace: "",
+        project: "",
+        runSetup: true,
+        runSync: true,
+        buildEditor: true,
+        runEditor: true,
+        pauseFailure: true,
+        keepOpen: false,
+        programs: ["ShaderCompileWorker", "UnrealFrontEnd"]
+      };
+
+      let currentPlatform = defaults.platform;
+      let programs = [...defaults.programs];
+      let generatedWrapper = "";
+      let copyFeedbackTimer = 0;
+      let progressiveHideTimer = 0;
+      let legendHoldTimer = 0;
+      let legendHoldComplete = false;
+
+      const $ = (id) => document.getElementById(id);
+      const workspace = $("workspace");
+      const project = $("project");
+      const workspaceMeta = $("workspaceMeta");
+      const setupLabel = $("setupLabel");
+      const runSetup = $("runSetup");
+      const runSync = $("runSync");
+      const buildEditor = $("buildEditor");
+      const runEditor = $("runEditor");
+      const pauseFailure = $("pauseFailure");
+      const keepOpen = $("keepOpen");
+      const pauseCard = $("pauseCard");
+      const keepOpenCard = $("keepOpenCard");
+      const posixSessionCard = $("posixSessionCard");
+      const remember = $("remember");
+      const progressiveArea = $("progressiveArea");
+      const unlockMessage = $("unlockMessage");
+      const workspaceConfirmation = $("workspaceConfirmation");
+      const projectConfirmation = $("projectConfirmation");
+      const programInput = $("programInput");
+      const programList = $("programList");
+      const programCount = $("programCount");
+      const addProgramButton = $("addProgram");
+      const programStatus = $("programStatus");
+      const preview = $("preview");
+      const status = $("status");
+      const copyButton = $("copy");
+      const generateButton = $("generate");
+      const batchTitle = $("batchTitle");
+      const runNote = $("runNote");
+      const exitPanel = $("exitPanel");
+      const exitLegend = $("exitLegend");
+      const exitClose = $("exitClose");
+      const builderMark = $("builderMark");
+      const titleEffect = $("titleEffect");
+      const subtitle = $("subtitle");
+
+      function profile(platform = currentPlatform) {
+        return platformProfiles[platform] || platformProfiles.windows;
+      }
+
+      function stripSurroundingQuotes(value) {
+        let result = value.trim();
+        const pairs = [
+          ['"', '"'],
+          ["'", "'"]
+        ];
+
+        for (const [open, close] of pairs) {
+          if (
+            result.startsWith(open) &&
+            result.endsWith(close) &&
+            result.length >= 2
+          ) {
+            result = result.slice(1, -1).trim();
+            break;
+          }
+        }
+
+        return result;
+      }
+
+      function cleanPath(value, platform = currentPlatform) {
+        let path = stripSurroundingQuotes(value);
+
+        if (platform === "windows") {
+          path = path.replace(/\//g, "\\");
+
+          if (/^[A-Za-z]:\\$/.test(path)) {
+            return path;
+          }
+
+          return path.replace(/\\+$/, "");
+        }
+
+        path = path.replace(/\\/g, "/");
+
+        if (path === "/") {
+          return path;
+        }
+
+        return path.replace(/\/+$/, "");
+      }
+
+      function resolveProjectInput(value, platform = currentPlatform) {
+        const input = cleanPath(value, platform);
+        const separator = platform === "windows" ? "\\" : "/";
+
+        if (!input) {
+          return {
+            input: "",
+            file: "",
+            directory: "",
+            inferred: false,
+            error: ""
+          };
+        }
+
+        if (/\.uproject$/i.test(input)) {
+          const lastSeparator = input.lastIndexOf(separator);
+
+          return {
+            input,
+            file: input,
+            directory:
+              lastSeparator >= 0
+                ? input.slice(0, lastSeparator) || separator
+                : "",
+            inferred: false,
+            error: ""
+          };
+        }
+
+        const segments = input.split(separator).filter(Boolean);
+        const folderName = segments.at(-1) || "";
+
+        if (
+          !folderName ||
+          (platform === "windows" && /^[A-Za-z]:$/.test(folderName)) ||
+          (platform !== "windows" && input === "/")
+        ) {
+          return {
+            input,
+            file: "",
+            directory: input,
+            inferred: true,
+            error: "A final project-folder name is required."
+          };
+        }
+
+        return {
+          input,
+          file: `${input}${separator}${folderName}.uproject`,
+          directory: input,
+          inferred: true,
+          error: ""
+        };
+      }
+
+      function pathProblem(value, required, platform = currentPlatform) {
+        if (!value) {
+          return required ? "A workspace root is required." : "";
+        }
+
+        if (/[\r\n]/.test(value)) {
+          return "Paths cannot contain line breaks.";
+        }
+
+        if (/[\u0000-\u001F]/.test(value)) {
+          return "The path contains a control character.";
+        }
+
+        if (
+          platform === "windows" &&
+          /[<>:"|?*]/.test(value.replace(/^[A-Za-z]:/, ""))
+        ) {
+          return "The path contains a character Windows paths cannot use.";
+        }
+
+        return "";
+      }
+
+      function escapeBatchLiteral(value) {
+        return value.replace(/%/g, "%%");
+      }
+
+      function shellQuote(value) {
+        return `'${String(value).replace(/'/g, `'\"'\"'`)}'`;
+      }
+
+      function generatedTimestamp() {
+        return new Date().toISOString();
+      }
+
+      function getConfig() {
+        const resolvedProject = resolveProjectInput(
+          project.value,
+          currentPlatform
+        );
+
+        return {
+          platform: currentPlatform,
+          workspace: cleanPath(workspace.value, currentPlatform),
+          project: resolvedProject.input,
+          projectFile: resolvedProject.file,
+          projectDirectory: resolvedProject.directory,
+          projectInferred: resolvedProject.inferred,
+          projectResolutionError: resolvedProject.error,
+          runSetup: runSetup.checked,
+          runSync: runSync.checked,
+          buildEditor: buildEditor.checked,
+          runEditor: runEditor.checked,
+          pauseFailure:
+            currentPlatform === "windows" ? pauseFailure.checked : false,
+          keepOpen:
+            currentPlatform === "windows" ? keepOpen.checked : true,
+          programs: [...programs]
+        };
+      }
+
+      function setProgressiveVisibility(show) {
+        window.clearTimeout(progressiveHideTimer);
+
+        if (show) {
+          if (progressiveArea.hidden) {
+            progressiveArea.hidden = false;
+            progressiveArea.classList.remove("is-visible");
+
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => {
+                progressiveArea.classList.add("is-visible");
+              });
+            });
+          } else {
+            progressiveArea.classList.add("is-visible");
+          }
+
+          return;
+        }
+
+        progressiveArea.classList.remove("is-visible");
+
+        progressiveHideTimer = window.setTimeout(() => {
+          progressiveArea.hidden = true;
+        }, 190);
+      }
+
+      function updatePlatformUI({ invalidate = false } = {}) {
+        const selected = profile();
+        const isWindows = currentPlatform === "windows";
+
+        document.body.dataset.platform = currentPlatform;
+
+        document.querySelectorAll(".platform-button").forEach((button) => {
+          const active = button.dataset.platform === currentPlatform;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+
+        workspace.placeholder = selected.workspacePlaceholder;
+        project.placeholder = selected.projectPlaceholder;
+        workspaceMeta.textContent = selected.workspaceMeta;
+        setupLabel.textContent = selected.setupLabel;
+        batchTitle.textContent = selected.outputTitle;
+        runNote.innerHTML =
+          currentPlatform === "windows"
+            ? "Save as <code>SetupUshell.bat</code> · double-click to run."
+            : currentPlatform === "linux"
+              ? "Save with LF as <code>SetupUshell.sh</code> · run: <code>sh SetupUshell.sh</code>"
+              : "Save with LF as <code>SetupUshell.command</code> · run: <code>sh SetupUshell.command</code>";
+
+        subtitle.textContent =
+          isWindows
+            ? "Resolve project → select pipeline → copy guarded batch."
+            : "Resolve project → select pipeline → copy self-starting POSIX wrapper.";
+
+        pauseCard.hidden = !isWindows;
+        keepOpenCard.hidden = !isWindows;
+        posixSessionCard.hidden = isWindows;
+
+        if (!copyButton.classList.contains("copied")) {
+          copyButton.textContent = selected.copyLabel;
+        }
+
+        renderExitLegend();
+        updateProgressiveUI();
+
+        if (invalidate) {
+          invalidatePreview();
+          persist();
+        }
+      }
+
+      function setPlatform(platform) {
+        if (!platformProfiles[platform] || platform === currentPlatform) {
+          return;
+        }
+
+        currentPlatform = platform;
+        updatePlatformUI({ invalidate: true });
+      }
+
+      function updateProgressiveUI() {
+        const config = getConfig();
+        const hasWorkspace = Boolean(config.workspace);
+        const workspaceError = pathProblem(
+          config.workspace,
+          true,
+          config.platform
+        );
+
+        setProgressiveVisibility(hasWorkspace);
+        unlockMessage.hidden = hasWorkspace;
+        generateButton.disabled = !hasWorkspace;
+
+        if (!hasWorkspace) {
+          workspaceConfirmation.textContent = "[waiting for input]";
+          workspaceConfirmation.className = "confirm-value";
+        } else if (workspaceError) {
+          workspaceConfirmation.textContent = `[invalid] ${workspaceError}`;
+          workspaceConfirmation.className = "confirm-value warn";
+        } else {
+          workspaceConfirmation.textContent = `[captured] ${config.workspace}`;
+          workspaceConfirmation.className = "confirm-value ready";
+        }
+
+        if (!config.project) {
+          projectConfirmation.textContent = "[none selected]";
+          projectConfirmation.className = "confirm-value";
+        } else if (config.projectResolutionError) {
+          projectConfirmation.textContent =
+            `[cannot infer] ${config.projectResolutionError}`;
+          projectConfirmation.className = "confirm-value warn";
+        } else {
+          const prefix = config.projectInferred ? "[inferred]" : "[explicit]";
+          projectConfirmation.textContent =
+            `${prefix} ${config.projectFile}`;
+          projectConfirmation.className = "confirm-value info";
+        }
+
+        updatePipelineRail(config);
+      }
+
+      function updatePipelineRail(config = getConfig()) {
+        const states = {
+          setup: config.runSetup,
+          ushell: true,
+          sync: config.runSync,
+          editor: config.buildEditor,
+          programs: config.programs.length > 0,
+          run: config.runEditor
+        };
+
+        document.querySelectorAll(".rail-node").forEach((node) => {
+          const enabled = states[node.dataset.stage];
+          node.classList.toggle("on", enabled);
+          node.classList.toggle("off", !enabled);
+
+          if (node.dataset.stage === "ushell") {
+            node.classList.add("required-node");
+          }
+        });
+      }
+
+      function validateConfig(config) {
+        const errors = [];
+        const workspaceError = pathProblem(
+          config.workspace,
+          true,
+          config.platform
+        );
+        const projectError = pathProblem(
+          config.project,
+          false,
+          config.platform
+        );
+
+        workspace.classList.toggle("invalid", Boolean(workspaceError));
+        project.classList.toggle(
+          "invalid",
+          Boolean(projectError || config.projectResolutionError)
+        );
+
+        if (workspaceError) errors.push(workspaceError);
+        if (projectError) errors.push(projectError);
+        if (config.projectResolutionError) {
+          errors.push(config.projectResolutionError);
+        }
+
+        if (config.programs.some((name) => !programPattern.test(name))) {
+          errors.push("At least one program name is invalid.");
+        }
+
+        return errors;
+      }
+
+      function windowsStage(
+        command,
+        stageCode,
+        stageName,
+        stepNumber,
+        totalSteps,
+        banner
+      ) {
+        return [
+          `call :pipeline_step ${stepNumber} ${totalSteps} "${banner}"`,
+          command,
+          'set "NATIVE_RC=%ERRORLEVEL%"',
+          'if not "%NATIVE_RC%"=="0" (',
+          `  set "EXIT_CODE=${stageCode}"`,
+          `  set "EXIT_STEP=${stageName}"`,
+          '  goto :failure',
+          ')',
+          ""
+        ];
+      }
+
+      function buildWindowsWrapper(config) {
+        const workspaceValue = escapeBatchLiteral(config.workspace);
+        const projectFileValue = escapeBatchLiteral(config.projectFile);
+
+        const totalSteps =
+          (config.runSetup ? 1 : 0) +
+          1 +
+          (config.runSync ? 1 : 0) +
+          (config.buildEditor ? 1 : 0) +
+          config.programs.length +
+          (config.runEditor ? 1 : 0);
+
+        let step = 1;
+
+        const lines = [
+          "@echo off",
+          "setlocal EnableExtensions DisableDelayedExpansion",
+          "title Unreal Engine ushell setup",
+          "",
+          "rem ============================================================",
+          `rem Generated by ushell Setup Wrapper Builder v${APP_VERSION}`,
+          `rem Generated: ${generatedTimestamp()}`,
+          "rem Platform: Windows",
+          "rem ============================================================",
+          "",
+          `set "WORKSPACE=${workspaceValue}"`,
+          `set "PROJECT_FILE=${projectFileValue}"`,
+          'set "SETUP_BAT=%WORKSPACE%\\setup.bat"',
+          'set "USHELL_BAT=%WORKSPACE%\\Engine\\Extras\\ushell\\ushell.bat"',
+          `set "PAUSE_ON_FAILURE=${config.pauseFailure ? "1" : "0"}"`,
+          `set "KEEP_USHELL_OPEN=${config.keepOpen ? "1" : "0"}"`,
+          'set "PUSHD_ACTIVE=0"',
+          'set "NATIVE_RC="',
+          "",
+          "rem Obtain the ANSI escape character used by the pipeline banners.",
+          'for /F "delims=" %%E in (\'echo prompt $E^| cmd\') do set "ESC=%%E"',
+          "",
+          "rem Exit codes:",
+          "rem   0   Success",
+          "rem   10  Workspace was not found",
+          "rem   11  setup.bat was not found",
+          "rem   12  ushell.bat was not found",
+          "rem   13  Resolved .uproject file was not found",
+          "rem   14  Could not enter the workspace",
+          "rem   20  setup.bat returned a non-zero code",
+          "rem   30  ushell initialisation failed",
+          "rem   40  Perforce sync returned a non-zero code",
+          "rem   50  Editor build failed",
+          "rem   70  Editor launch failed"
+        ];
+
+        config.programs.forEach((name, index) => {
+          lines.push(
+            `rem   ${100 + index}  Program build failed: ${name}`
+          );
+        });
+
+        if (config.projectInferred && config.projectFile) {
+          lines.push(
+            "",
+            "rem Project folder input resolved to:",
+            `rem   ${projectFileValue}`
+          );
+        }
+
+        lines.push(
+          "",
+          "echo %ESC%[96m-- ushell setup pipeline%ESC%[0m",
+          'echo Workspace: "%WORKSPACE%"',
+          'if defined PROJECT_FILE (echo Project:   "%PROJECT_FILE%") else (echo Project:   [none])',
+          "",
+          'if not exist "%WORKSPACE%\\." (',
+          '  set "EXIT_CODE=10"',
+          '  set "EXIT_STEP=Workspace validation"',
+          "  goto :failure",
+          ")",
+          ""
+        );
+
+        if (config.runSetup) {
+          lines.push(
+            'if not exist "%SETUP_BAT%" (',
+            '  set "EXIT_CODE=11"',
+            '  set "EXIT_STEP=setup.bat validation"',
+            "  goto :failure",
+            ")",
+            ""
+          );
+        }
+
+        lines.push(
+          'if not exist "%USHELL_BAT%" (',
+          '  set "EXIT_CODE=12"',
+          '  set "EXIT_STEP=ushell.bat validation"',
+          "  goto :failure",
+          ")",
+          "",
+          'if defined PROJECT_FILE if not exist "%PROJECT_FILE%" (',
+          '  set "EXIT_CODE=13"',
+          '  set "EXIT_STEP=.uproject validation"',
+          "  goto :failure",
+          ")",
+          "",
+          'pushd "%WORKSPACE%" 2>nul',
+          "if errorlevel 1 (",
+          '  set "EXIT_CODE=14"',
+          '  set "EXIT_STEP=Entering workspace"',
+          "  goto :failure",
+          ")",
+          'set "PUSHD_ACTIVE=1"',
+          ""
+        );
+
+        if (config.runSetup) {
+          lines.push(
+            ...windowsStage(
+              'call "%SETUP_BAT%"',
+              20,
+              "Workspace setup",
+              step++,
+              totalSteps,
+              "RUN WORKSPACE SETUP"
+            )
+          );
+        }
+
+        const ushellCommand = config.projectFile
+          ? 'call "%USHELL_BAT%" --project="%PROJECT_FILE%"'
+          : 'call "%USHELL_BAT%"';
+
+        lines.push(
+          ...windowsStage(
+            ushellCommand,
+            30,
+            "ushell initialisation",
+            step++,
+            totalSteps,
+            "INITIALISE USHELL"
+          )
+        );
+
+        if (config.runSync) {
+          lines.push(
+            ...windowsStage(
+              ".p4 sync",
+              40,
+              "Perforce sync",
+              step++,
+              totalSteps,
+              "SYNC SELECTED PROJECT"
+            )
+          );
+        }
+
+        if (config.buildEditor) {
+          lines.push(
+            ...windowsStage(
+              ".build editor",
+              50,
+              "Editor build",
+              step++,
+              totalSteps,
+              "BUILD EDITOR"
+            )
+          );
+        }
+
+        config.programs.forEach((name, index) => {
+          lines.push(
+            ...windowsStage(
+              `.build program ${name}`,
+              100 + index,
+              `Program build: ${name}`,
+              step++,
+              totalSteps,
+              `BUILD PROGRAM :: ${name}`
+            )
+          );
+        });
+
+        if (config.runEditor) {
+          lines.push(
+            ...windowsStage(
+              ".run editor",
+              70,
+              "Editor launch",
+              step++,
+              totalSteps,
+              "RUN EDITOR"
+            )
+          );
+        }
+
+        lines.push(
+          "goto :success",
+          "",
+          ":pipeline_step",
+          "rem echo( first forces a new line even when preceding ushell output did not.",
+          "echo(",
+          "echo %ESC%[94m-------------------------------------------------------------------------------%ESC%[0m",
+          "echo %ESC%[96m[ PIPELINE %~1/%~2 ]%ESC%[0m %ESC%[97m%~3%ESC%[0m",
+          "echo %ESC%[94m-------------------------------------------------------------------------------%ESC%[0m",
+          "exit /b 0",
+          "",
+          ":failure",
+          'if "%PUSHD_ACTIVE%"=="1" popd',
+          'set "PUSHD_ACTIVE=0"',
+          "echo(",
+          "echo %ESC%[91m[ ERROR %EXIT_CODE% ]%ESC%[0m %EXIT_STEP% failed.",
+          "if defined NATIVE_RC echo Underlying command exit code: %NATIVE_RC%",
+          "echo The wrapper stopped before later stages were attempted.",
+          'if "%PAUSE_ON_FAILURE%"=="1" pause',
+          "exit /b %EXIT_CODE%",
+          "",
+          ":success",
+          "echo(",
+          "echo %ESC%[92m[ SUCCESS ]%ESC%[0m All selected stages completed.",
+          'if "%KEEP_USHELL_OPEN%"=="1" (',
+          "  echo(",
+          "  echo %ESC%[96m[ USHELL ]%ESC%[0m Running completion animation...",
+          "  .zzz",
+          "  echo(",
+          "  echo %ESC%[96m[ USHELL ]%ESC%[0m Opening an interactive ushell session.",
+          "  echo Type exit or close this window when finished.",
+          "  if defined PROJECT_FILE (",
+          '    cmd.exe /d /k call "%USHELL_BAT%" --project="%PROJECT_FILE%"',
+          "  ) else (",
+          '    cmd.exe /d /k call "%USHELL_BAT%"',
+          "  )",
+          ")",
+          'if "%PUSHD_ACTIVE%"=="1" popd',
+          'set "PUSHD_ACTIVE=0"',
+          "exit /b 0",
+          ""
+        );
+
+        return lines.join("\r\n");
+      }
+
+      function posixStageLines(
+        command,
+        stageCode,
+        stageName,
+        stepNumber,
+        totalSteps,
+        banner
+      ) {
+        return [
+          `_usw_run_stage ${stageCode} ${shellQuote(stageName)} ${stepNumber} ${totalSteps} ${shellQuote(banner)} ${command} || return $?`
+        ];
+      }
+
+      function buildPosixWrapper(config) {
+        const isMac = config.platform === "macos";
+        const platformName = isMac ? "macOS" : "Linux";
+        const workspaceValue = shellQuote(config.workspace);
+        const projectFileValue = shellQuote(config.projectFile);
+
+        const totalSteps =
+          (config.runSetup ? 1 : 0) +
+          1 +
+          (config.runSync ? 1 : 0) +
+          (config.buildEditor ? 1 : 0) +
+          config.programs.length +
+          (config.runEditor ? 1 : 0);
+
+        let step = 1;
+
+        const lines = [
+          "#!/bin/sh",
+          "",
+          "# ============================================================",
+          `# Generated by ushell Setup Wrapper Builder v${APP_VERSION}`,
+          `# Generated: ${generatedTimestamp()}`,
+          `# Platform: ${platformName}`,
+          `# Launch: sh ${profile(config.platform).filename}`,
+          "# Advanced: source this file from Bash or Zsh.",
+          "# ============================================================",
+          "",
+          `_USW_PLATFORM=${shellQuote(config.platform)}`,
+          `_USW_WORKSPACE=${workspaceValue}`,
+          `_USW_PROJECT_FILE=${projectFileValue}`,
+          `_USW_RUN_SETUP=${config.runSetup ? "1" : "0"}`,
+          `_USW_RUN_SYNC=${config.runSync ? "1" : "0"}`,
+          `_USW_BUILD_EDITOR=${config.buildEditor ? "1" : "0"}`,
+          `_USW_RUN_EDITOR=${config.runEditor ? "1" : "0"}`,
+          `_USW_TOTAL_STEPS=${totalSteps}`,
+          "",
+          "# Detect direct sourcing by supported host shells.",
+          "_usw_is_sourced=0",
+          'if [ -n "${BASH_VERSION:-}" ]; then',
+          '  if [ "${BASH_SOURCE:-$0}" != "$0" ]; then _usw_is_sourced=1; fi',
+          'elif [ -n "${ZSH_VERSION:-}" ]; then',
+          '  case "${ZSH_EVAL_CONTEXT:-}" in *:file) _usw_is_sourced=1 ;; esac',
+          "fi",
+          "",
+          "# Normal user path: sh SetupUshell.sh / sh SetupUshell.command",
+          'if [ "${USHELL_WRAPPER_INNER:-0}" != "1" ] && [ "$_usw_is_sourced" -ne 1 ]; then',
+          '  _usw_script=$0',
+          '  case "$_usw_script" in',
+          '    /*) ;;',
+          '    *) _usw_script=$(cd "$(dirname "$_usw_script")" 2>/dev/null && pwd)/$(basename "$_usw_script") ;;',
+          "  esac",
+          "",
+          '  _usw_requested=${USHELL_WRAPPER_SHELL:-${SHELL:-}}',
+          "  _usw_host=",
+          "  _usw_host_name=",
+          "",
+          '  case "$(basename "$_usw_requested" 2>/dev/null)" in',
+          "    bash|zsh)",
+          '      _usw_host_name=$(basename "$_usw_requested")',
+          '      if [ -n "$_usw_requested" ] && [ -x "$_usw_requested" ]; then',
+          '        _usw_host=$_usw_requested',
+          '      elif command -v "$_usw_host_name" >/dev/null 2>&1; then',
+          '        _usw_host=$(command -v "$_usw_host_name")',
+          "      fi",
+          "      ;;",
+          "  esac",
+          "",
+          '  if [ -z "$_usw_host" ]; then'
+        ];
+
+        if (isMac) {
+          lines.push(
+            "    for _usw_candidate in zsh bash; do",
+            '      if command -v "$_usw_candidate" >/dev/null 2>&1; then',
+            '        _usw_host=$(command -v "$_usw_candidate")',
+            '        _usw_host_name=$_usw_candidate',
+            "        break",
+            "      fi",
+            "    done"
+          );
+        } else {
+          lines.push(
+            "    for _usw_candidate in bash zsh; do",
+            '      if command -v "$_usw_candidate" >/dev/null 2>&1; then',
+            '        _usw_host=$(command -v "$_usw_candidate")',
+            '        _usw_host_name=$_usw_candidate',
+            "        break",
+            "      fi",
+            "    done"
+          );
+        }
+
+        lines.push(
+          "  fi",
+          "",
+          '  if [ -z "$_usw_host" ]; then',
+          "    printf '\\n[ ERROR 15 ] No supported interactive Bash or Zsh host was found.\\n' >&2",
+          "    exit 15",
+          "  fi",
+          "",
+          '  _usw_boot_dir=$(mktemp -d "${TMPDIR:-/tmp}/ushell-wrapper.XXXXXX") || {',
+          "    printf '\\n[ ERROR 15 ] Could not create the temporary interactive-shell bootstrap.\\n' >&2",
+          "    exit 15",
+          "  }",
+          "",
+          "  export USHELL_WRAPPER_INNER=1",
+          '  export USHELL_WRAPPER_SCRIPT="$_usw_script"',
+          '  export USHELL_WRAPPER_BOOT_DIR="$_usw_boot_dir"',
+          "",
+          '  if [ "$_usw_host_name" = "zsh" ]; then',
+          '    if [ "${ZDOTDIR+x}" = "x" ]; then',
+          "      export USHELL_WRAPPER_ZDOT_WAS_SET=1",
+          '      export USHELL_WRAPPER_USER_ZDOTDIR="$ZDOTDIR"',
+          "    else",
+          "      export USHELL_WRAPPER_ZDOT_WAS_SET=0",
+          '      export USHELL_WRAPPER_USER_ZDOTDIR="$HOME"',
+          "    fi",
+          "",
+          '    cat > "$_usw_boot_dir/.zshrc" <<\'USHELL_WRAPPER_ZSHRC\'',
+          'if [ -r "$USHELL_WRAPPER_USER_ZDOTDIR/.zshrc" ]; then',
+          '  . "$USHELL_WRAPPER_USER_ZDOTDIR/.zshrc"',
+          "fi",
+          '. "$USHELL_WRAPPER_SCRIPT"',
+          "_usw_rc=$?",
+          'rm -rf "$USHELL_WRAPPER_BOOT_DIR"',
+          'if [ "$USHELL_WRAPPER_ZDOT_WAS_SET" = "1" ]; then',
+          '  export ZDOTDIR="$USHELL_WRAPPER_USER_ZDOTDIR"',
+          "else",
+          "  unset ZDOTDIR",
+          "fi",
+          "unset USHELL_WRAPPER_INNER USHELL_WRAPPER_SCRIPT USHELL_WRAPPER_BOOT_DIR",
+          "unset USHELL_WRAPPER_ZDOT_WAS_SET USHELL_WRAPPER_USER_ZDOTDIR",
+          'if [ "$_usw_rc" -ne 0 ]; then',
+          '  printf "\\n[ WRAPPER ] Pipeline returned code %s. The interactive shell remains open.\\n" "$_usw_rc"',
+          "fi",
+          "unset _usw_rc",
+          "USHELL_WRAPPER_ZSHRC",
+          "",
+          '    ZDOTDIR="$_usw_boot_dir" exec "$_usw_host" -i',
+          "  else",
+          '    cat > "$_usw_boot_dir/bashrc" <<\'USHELL_WRAPPER_BASHRC\'',
+          'if [ -r "$HOME/.bashrc" ]; then',
+          '  . "$HOME/.bashrc"',
+          "fi",
+          '. "$USHELL_WRAPPER_SCRIPT"',
+          "_usw_rc=$?",
+          'rm -rf "$USHELL_WRAPPER_BOOT_DIR"',
+          "unset USHELL_WRAPPER_INNER USHELL_WRAPPER_SCRIPT USHELL_WRAPPER_BOOT_DIR",
+          'if [ "$_usw_rc" -ne 0 ]; then',
+          '  printf "\\n[ WRAPPER ] Pipeline returned code %s. The interactive shell remains open.\\n" "$_usw_rc"',
+          "fi",
+          "unset _usw_rc",
+          "USHELL_WRAPPER_BASHRC",
+          "",
+          '    exec "$_usw_host" --rcfile "$_usw_boot_dir/bashrc" -i',
+          "  fi",
+          "",
+          '  _usw_boot_rc=$?',
+          '  rm -rf "$_usw_boot_dir"',
+          "  printf '\\n[ ERROR 15 ] Could not start the interactive host shell.\\n' >&2",
+          '  exit "$_usw_boot_rc"',
+          "fi",
+          "",
+          "# The remainder runs only when sourced by the interactive Bash/Zsh host.",
+          '_usw_esc=$(printf "\\033")',
+          '_usw_reset="${_usw_esc}[0m"',
+          '_usw_blue="${_usw_esc}[94m"',
+          '_usw_cyan="${_usw_esc}[96m"',
+          '_usw_green="${_usw_esc}[92m"',
+          '_usw_red="${_usw_esc}[91m"',
+          '_usw_white="${_usw_esc}[97m"',
+          "",
+          "_usw_banner() {",
+          "  _usw_current=$1",
+          "  _usw_total=$2",
+          "  _usw_title=$3",
+          "  printf '\\n%s%s%s\\n' \"$_usw_blue\" '-------------------------------------------------------------------------------' \"$_usw_reset\"",
+          "  printf '%s[ PIPELINE %s/%s ]%s %s%s%s\\n' \"$_usw_cyan\" \"$_usw_current\" \"$_usw_total\" \"$_usw_reset\" \"$_usw_white\" \"$_usw_title\" \"$_usw_reset\"",
+          "  printf '%s%s%s\\n' \"$_usw_blue\" '-------------------------------------------------------------------------------' \"$_usw_reset\"",
+          "}",
+          "",
+          "_usw_fail() {",
+          "  _usw_code=$1",
+          "  _usw_stage=$2",
+          "  _usw_native=$3",
+          "  printf '\\n%s[ ERROR %s ]%s %s failed.\\n' \"$_usw_red\" \"$_usw_code\" \"$_usw_reset\" \"$_usw_stage\" >&2",
+          "  printf 'Underlying command exit code: %s\\n' \"$_usw_native\" >&2",
+          "  printf 'The wrapper stopped before later stages were attempted.\\n' >&2",
+          '  return "$_usw_code"',
+          "}",
+          "",
+          "_usw_run_stage() {",
+          "  _usw_code=$1",
+          "  _usw_stage=$2",
+          "  _usw_current=$3",
+          "  _usw_total=$4",
+          "  _usw_title=$5",
+          "  shift 5",
+          "",
+          '  _usw_banner "$_usw_current" "$_usw_total" "$_usw_title"',
+          '  "$@"',
+          "  _usw_native=$?",
+          "",
+          '  if [ "$_usw_native" -ne 0 ]; then',
+          '    _usw_fail "$_usw_code" "$_usw_stage" "$_usw_native"',
+          "    return $?",
+          "  fi",
+          "",
+          "  return 0",
+          "}",
+          "",
+          "_usw_cleanup_wrapper() {",
+          "  local _usw_final_result=$1",
+          "  unset _USW_PLATFORM _USW_WORKSPACE _USW_PROJECT_FILE _USW_RUN_SETUP",
+          "  unset _USW_RUN_SYNC _USW_BUILD_EDITOR _USW_RUN_EDITOR _USW_TOTAL_STEPS",
+          "  unset _usw_esc _usw_reset _usw_blue _usw_cyan _usw_green _usw_red _usw_white",
+          "  unset _usw_is_sourced _usw_result",
+          "  unset -f _usw_banner _usw_fail _usw_run_stage _usw_main _usw_cleanup_wrapper 2>/dev/null || true",
+          "  return \"$_usw_final_result\"",
+          "}",
+          "",
+          "_usw_main() {",
+          "  local _usw_original_dir=$PWD",
+          "  local _usw_ushell_script",
+          "  local _usw_setup_script",
+          "  local _usw_target_dir",
+          "  local _usw_native",
+          "  local _usw_stage_result",
+          `  _usw_ushell_script="$_USW_WORKSPACE/Engine/Extras/ushell/ushell.sh"`
+        );
+
+        if (isMac) {
+          lines.push(
+            '  if [ -f "$_USW_WORKSPACE/Setup.command" ]; then',
+            '    _usw_setup_script="$_USW_WORKSPACE/Setup.command"',
+            '  else',
+            '    _usw_setup_script="$_USW_WORKSPACE/Setup.sh"',
+            "  fi"
+          );
+        } else {
+          lines.push(
+            '  _usw_setup_script="$_USW_WORKSPACE/Setup.sh"'
+          );
+        }
+
+        lines.push(
+          "",
+          '  printf "%s-- ushell setup pipeline%s\\n" "$_usw_cyan" "$_usw_reset"',
+          '  printf "Platform:  %s\\n" "$_USW_PLATFORM"',
+          '  printf "Workspace: %s\\n" "$_USW_WORKSPACE"',
+          '  if [ -n "$_USW_PROJECT_FILE" ]; then',
+          '    printf "Project:   %s\\n" "$_USW_PROJECT_FILE"',
+          "  else",
+          '    printf "Project:   [none]\\n"',
+          "  fi",
+          "",
+          '  if [ ! -d "$_USW_WORKSPACE" ]; then',
+          '    _usw_fail 10 "Workspace validation" 1',
+          "    return 10",
+          "  fi",
+          "",
+          '  if [ ! -f "$_usw_ushell_script" ]; then',
+          '    _usw_fail 12 "ushell.sh validation" 1',
+          "    return 12",
+          "  fi",
+          "",
+          '  if [ -n "$_USW_PROJECT_FILE" ] && [ ! -f "$_USW_PROJECT_FILE" ]; then',
+          '    _usw_fail 13 ".uproject validation" 1',
+          "    return 13",
+          "  fi",
+          ""
+        );
+
+        if (config.runSetup) {
+          lines.push(
+            '  if [ ! -f "$_usw_setup_script" ]; then',
+            '    _usw_fail 11 "Platform setup validation" 1',
+            "    return 11",
+            "  fi",
+            "",
+            "  if ! command -v bash >/dev/null 2>&1; then",
+            '    _usw_fail 18 "Bash required by the engine setup script" 127',
+            "    return 18",
+            "  fi",
+            ""
+          );
+        }
+
+        lines.push(
+          '  if ! cd "$_USW_WORKSPACE"; then',
+          '    _usw_fail 14 "Entering workspace" 1',
+          "    return 14",
+          "  fi",
+          ""
+        );
+
+        if (config.runSetup) {
+          const setupStep = step++;
+          lines.push(
+            `  _usw_run_stage 20 ${shellQuote("Workspace setup")} ${setupStep} ${totalSteps} ${shellQuote("RUN WORKSPACE SETUP")} bash "$_usw_setup_script"`,
+            "  _usw_stage_result=$?",
+            '  if [ "$_usw_stage_result" -ne 0 ]; then',
+            '    cd "$_usw_original_dir" 2>/dev/null || true',
+            '    return "$_usw_stage_result"',
+            "  fi",
+            ""
+          );
+        }
+
+        lines.push(
+          '  if [ -n "$_USW_PROJECT_FILE" ]; then',
+          '    _usw_target_dir=$(dirname "$_USW_PROJECT_FILE")',
+          "  else",
+          '    _usw_target_dir=$_USW_WORKSPACE',
+          "  fi",
+          "",
+          '  if ! cd "$_usw_target_dir"; then',
+          '    cd "$_usw_original_dir" 2>/dev/null || true',
+          '    _usw_fail 14 "Entering project directory" 1',
+          "    return 14",
+          "  fi",
+          "",
+          `  _usw_banner ${step++} ${totalSteps} ${shellQuote("INITIALISE USHELL")}`,
+          '  if [ -n "$_USW_PROJECT_FILE" ]; then',
+          '    . "$_usw_ushell_script" --project="$_USW_PROJECT_FILE"',
+          "  else",
+          '    . "$_usw_ushell_script"',
+          "  fi",
+          "  _usw_native=$?",
+          '  if [ "$_usw_native" -ne 0 ]; then',
+          '    cd "$_usw_original_dir" 2>/dev/null || true',
+          '    _usw_fail 30 "ushell initialisation" "$_usw_native"',
+          "    return 30",
+          "  fi",
+          ""
+        );
+
+        if (config.runSync) {
+          lines.push(
+            ...posixStageLines(
+              ".p4 sync",
+              40,
+              "Perforce sync",
+              step++,
+              totalSteps,
+              "SYNC SELECTED PROJECT"
+            ),
+            ""
+          );
+        }
+
+        if (config.buildEditor) {
+          lines.push(
+            ...posixStageLines(
+              ".build editor",
+              50,
+              "Editor build",
+              step++,
+              totalSteps,
+              "BUILD EDITOR"
+            ),
+            ""
+          );
+        }
+
+        config.programs.forEach((name, index) => {
+          lines.push(
+            ...posixStageLines(
+              `.build program ${name}`,
+              100 + index,
+              `Program build: ${name}`,
+              step++,
+              totalSteps,
+              `BUILD PROGRAM :: ${name}`
+            ),
+            ""
+          );
+        });
+
+        lines.push(
+          '  printf "\\n%s[ BUILDS COMPLETE ]%s Review the pipeline results before editor launch.\\n" "$_usw_green" "$_usw_reset"',
+          "  if command -v .zzz >/dev/null 2>&1; then",
+          "    .zzz || true",
+          "  fi",
+          ""
+        );
+
+        if (config.runEditor) {
+          lines.push(
+            ...posixStageLines(
+              ".run editor",
+              70,
+              "Editor launch",
+              step++,
+              totalSteps,
+              "RUN EDITOR"
+            ),
+            ""
+          );
+        }
+
+        lines.push(
+          '  printf "\\n%s[ SUCCESS ]%s All selected stages completed.\\n" "$_usw_green" "$_usw_reset"',
+          '  printf "Interactive ushell is ready. Close this shell or type exit when finished.\\n"',
+          "  return 0",
+          "}",
+          "",
+          "_usw_main",
+          "_usw_result=$?",
+          "_usw_cleanup_wrapper \"$_usw_result\"",
+          "return $?"
+        );
+
+        return lines.join("\n");
+      }
+
+      function buildWrapper(config) {
+        return config.platform === "windows"
+          ? buildWindowsWrapper(config)
+          : buildPosixWrapper(config);
+      }
+
+      function renderPrograms() {
+        programList.innerHTML = "";
+
+        if (!programs.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint";
+          empty.textContent = "[none] No extra programs will be built.";
+          programList.appendChild(empty);
+        }
+
+        programs.forEach((name, index) => {
+          const row = document.createElement("div");
+          row.className = "program-row";
+
+          const order = document.createElement("span");
+          order.className = "program-index";
+          order.textContent = String(index + 1).padStart(2, "0");
+          order.title = `Build position ${index + 1}`;
+
+          const label = document.createElement("span");
+          label.className = "program-name";
+          label.textContent = name;
+          label.title = name;
+
+          const up = document.createElement("button");
+          up.type = "button";
+          up.className = "icon-button";
+          up.textContent = "↑";
+          up.title = `Move ${name} up`;
+          up.disabled = index === 0;
+          up.addEventListener("click", () => {
+            [programs[index - 1], programs[index]] = [
+              programs[index],
+              programs[index - 1]
+            ];
+            renderPrograms();
+            updatePipelineRail();
+            invalidatePreview();
+            persist();
+          });
+
+          const down = document.createElement("button");
+          down.type = "button";
+          down.className = "icon-button";
+          down.textContent = "↓";
+          down.title = `Move ${name} down`;
+          down.disabled = index === programs.length - 1;
+          down.addEventListener("click", () => {
+            [programs[index + 1], programs[index]] = [
+              programs[index],
+              programs[index + 1]
+            ];
+            renderPrograms();
+            updatePipelineRail();
+            invalidatePreview();
+            persist();
+          });
+
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "icon-button remove";
+          remove.textContent = "×";
+          remove.title = `Remove ${name}`;
+          remove.addEventListener("click", () => {
+            programs.splice(index, 1);
+            renderPrograms();
+            renderExitLegend();
+            updatePipelineRail();
+            invalidatePreview();
+            persist();
+          });
+
+          row.append(order, label, up, down, remove);
+          programList.appendChild(row);
+        });
+
+        programCount.textContent = `${programs.length} / ${MAX_PROGRAMS} targets`;
+        addProgramButton.disabled = programs.length >= MAX_PROGRAMS;
+        programInput.disabled = programs.length >= MAX_PROGRAMS;
+        programInput.placeholder =
+          programs.length >= MAX_PROGRAMS
+            ? "Maximum program targets reached"
+            : "Add program name";
+      }
+
+      function renderExitLegend() {
+        const setupName =
+          currentPlatform === "windows"
+            ? "setup.bat"
+            : currentPlatform === "linux"
+              ? "Setup.sh"
+              : "Setup.command or Setup.sh";
+
+        const ushellName =
+          currentPlatform === "windows" ? "ushell.bat" : "ushell.sh";
+
+        const entries = [
+          ["0", "All selected stages completed."],
+          ["10", "Workspace root was not found."],
+          ["11", `${setupName} was not found when setup was selected.`],
+          ["12", `${ushellName} was not found.`],
+          ["13", "The explicit or inferred .uproject file was not found."],
+          ["14", "The wrapper could not enter the required directory."],
+          ["20", `${setupName} returned a non-zero exit code.`],
+          ["30", "ushell initialisation returned a non-zero exit code."],
+          ["40", ".p4 sync returned a non-zero exit code."],
+          ["50", ".build editor returned a non-zero exit code."],
+          ["70", ".run editor returned a non-zero exit code."],
+          ["100+", "One of the ordered program builds failed."]
+        ];
+
+        if (currentPlatform !== "windows") {
+          entries.splice(
+            6,
+            0,
+            ["15", "The interactive Bash/Zsh host could not be started."],
+            ["18", "Bash was unavailable for the engine setup script."]
+          );
+        }
+
+        exitLegend.innerHTML = "";
+
+        entries.forEach(([code, description]) => {
+          const dt = document.createElement("dt");
+          const dd = document.createElement("dd");
+          dt.textContent = code;
+          dd.textContent = description;
+          exitLegend.append(dt, dd);
+        });
+      }
+
+      function addProgram() {
+        const name = programInput.value.trim();
+
+        if (!name) {
+          setProgramStatus("Enter a program name first.", "warn");
+          return;
+        }
+
+        if (!programPattern.test(name)) {
+          setProgramStatus(
+            "Use only letters, digits, dots, underscores, or hyphens.",
+            "bad"
+          );
+          return;
+        }
+
+        if (programs.length >= MAX_PROGRAMS) {
+          setProgramStatus("Maximum of six program targets reached.", "warn");
+          return;
+        }
+
+        if (
+          programs.some(
+            (item) => item.toLowerCase() === name.toLowerCase()
+          )
+        ) {
+          setProgramStatus("That program is already in the list.", "warn");
+          return;
+        }
+
+        programs.push(name);
+        programInput.value = "";
+        renderPrograms();
+        renderExitLegend();
+        updatePipelineRail();
+        invalidatePreview();
+        persist();
+        setProgramStatus(`${name} added.`, "good");
+        programInput.focus();
+      }
+
+      function setProgramStatus(message, kind = "") {
+        programStatus.textContent = message;
+        programStatus.className = `status ${kind}`.trim();
+      }
+
+      function setStatus(message, kind = "") {
+        status.textContent = message;
+        status.className = `status ${kind}`.trim();
+      }
+
+      function defaultPreviewText() {
+        return cleanPath(workspace.value, currentPlatform)
+          ? "// configuration changed\n// generate the wrapper again"
+          : "// workspace root required\n// pipeline locked";
+      }
+
+      function resetCopyFeedback() {
+        window.clearTimeout(copyFeedbackTimer);
+        copyFeedbackTimer = 0;
+        copyButton.classList.remove("copied");
+        copyButton.textContent = profile().copyLabel;
+      }
+
+      function invalidatePreview() {
+        generatedWrapper = "";
+        resetCopyFeedback();
+        copyButton.disabled = true;
+        preview.textContent = defaultPreviewText();
+        preview.className = "empty";
+        setStatus("");
+      }
+
+      function generate() {
+        const config = getConfig();
+        const errors = validateConfig(config);
+
+        if (errors.length) {
+          generatedWrapper = "";
+          copyButton.disabled = true;
+          preview.textContent = errors
+            .map((error) => `[ input error ] ${error}`)
+            .join("\n");
+          preview.className = "empty";
+          setStatus("Correct the highlighted input.", "bad");
+          return;
+        }
+
+        generatedWrapper = buildWrapper(config);
+        preview.textContent = generatedWrapper;
+        preview.className = "";
+        copyButton.disabled = false;
+
+        setStatus(
+          config.platform === "windows"
+            ? "Windows batch generated. Review it before copying."
+            : `${profile(config.platform).label} wrapper generated with LF line endings.`,
+          "good"
+        );
+
+        persist();
+      }
+
+      function showCopyFeedback() {
+        resetCopyFeedback();
+        copyButton.textContent = "copied";
+        copyButton.classList.add("copied");
+
+        copyFeedbackTimer = window.setTimeout(() => {
+          copyButton.classList.remove("copied");
+          copyButton.textContent = profile().copyLabel;
+          copyFeedbackTimer = 0;
+        }, 2200);
+      }
+
+      async function copyWrapper() {
+        if (!generatedWrapper) return;
+
+        try {
+          await navigator.clipboard.writeText(generatedWrapper);
+          showCopyFeedback();
+          setStatus("Wrapper copied.", "good");
+        } catch {
+          const helper = document.createElement("textarea");
+          helper.value = generatedWrapper;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "fixed";
+          helper.style.opacity = "0";
+          document.body.appendChild(helper);
+          helper.select();
+
+          const copied = document.execCommand("copy");
+          helper.remove();
+
+          if (copied) {
+            showCopyFeedback();
+            setStatus("Wrapper copied.", "good");
+          } else {
+            resetCopyFeedback();
+            setStatus(
+              "Clipboard access was blocked. Copy the preview manually.",
+              "warn"
+            );
+          }
+        }
+      }
+
+      function removeStoredConfig() {
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // Storage may be unavailable for local files or hardened browsers.
+        }
+      }
+
+      function readStoredConfig() {
+        try {
+          return localStorage.getItem(storageKey);
+        } catch {
+          return null;
+        }
+      }
+
+      function writeStoredConfig(value) {
+        try {
+          localStorage.setItem(storageKey, value);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function persist() {
+        if (!remember.checked) {
+          removeStoredConfig();
+          return;
+        }
+
+        writeStoredConfig(
+          JSON.stringify({
+            ...getConfig(),
+            remember: true
+          })
+        );
+      }
+
+      function loadPersisted() {
+        let saved = null;
+
+        try {
+          saved = JSON.parse(readStoredConfig() || "null");
+        } catch {
+          removeStoredConfig();
+        }
+
+        if (!saved || !saved.remember) return;
+
+        currentPlatform = platformProfiles[saved.platform]
+          ? saved.platform
+          : defaults.platform;
+        workspace.value = saved.workspace || "";
+        project.value = saved.project || "";
+        runSetup.checked = saved.runSetup !== false;
+        runSync.checked = saved.runSync !== false;
+        buildEditor.checked = saved.buildEditor !== false;
+        runEditor.checked = saved.runEditor !== false;
+        pauseFailure.checked = saved.pauseFailure !== false;
+        keepOpen.checked = saved.keepOpen === true;
+        remember.checked = true;
+
+        programs = Array.isArray(saved.programs)
+          ? saved.programs
+              .filter(
+                (name) =>
+                  typeof name === "string" &&
+                  programPattern.test(name)
+              )
+              .slice(0, MAX_PROGRAMS)
+          : [...defaults.programs];
+      }
+
+      function resetAll() {
+        currentPlatform = defaults.platform;
+        workspace.value = defaults.workspace;
+        project.value = defaults.project;
+        runSetup.checked = defaults.runSetup;
+        runSync.checked = defaults.runSync;
+        buildEditor.checked = defaults.buildEditor;
+        runEditor.checked = defaults.runEditor;
+        pauseFailure.checked = defaults.pauseFailure;
+        keepOpen.checked = defaults.keepOpen;
+        remember.checked = false;
+        programs = [...defaults.programs];
+
+        removeStoredConfig();
+        renderPrograms();
+
+        generatedWrapper = "";
+        preview.textContent =
+          "// workspace root required\n// pipeline locked";
+        preview.className = "empty";
+        resetCopyFeedback();
+        copyButton.disabled = true;
+        setStatus("Defaults restored.");
+        setProgramStatus("");
+        workspace.classList.remove("invalid");
+        project.classList.remove("invalid");
+        updatePlatformUI();
+        workspace.focus();
+      }
+
+      function playBuilderFidget() {
+        builderMark.classList.remove("fidget");
+        void builderMark.offsetWidth;
+        builderMark.classList.add("fidget");
+        window.setTimeout(
+          () => builderMark.classList.remove("fidget"),
+          420
+        );
+      }
+
+      function openExitLegend() {
+        exitPanel.hidden = false;
+        document.body.classList.add("legend-open");
+        window.requestAnimationFrame(() => exitPanel.classList.add("open"));
+        exitClose.focus({ preventScroll: true });
+      }
+
+      function closeExitLegend() {
+        exitPanel.classList.remove("open");
+        document.body.classList.remove("legend-open");
+
+        window.setTimeout(() => {
+          exitPanel.hidden = true;
+          builderMark.focus({ preventScroll: true });
+        }, 160);
+      }
+
+      function completeLegendHold() {
+        legendHoldTimer = 0;
+        legendHoldComplete = true;
+        builderMark.classList.remove("holding");
+        builderMark.classList.add("hold-complete");
+
+        window.setTimeout(
+          () => builderMark.classList.remove("hold-complete"),
+          520
+        );
+
+        openExitLegend();
+      }
+
+      function startLegendHold(event) {
+        if (event.type === "pointerdown" && event.button !== 0) return;
+        if (legendHoldTimer) return;
+
+        legendHoldComplete = false;
+        builderMark.classList.remove("fidget", "hold-complete");
+        builderMark.classList.add("holding");
+        builderMark.setAttribute("aria-pressed", "true");
+
+        if (
+          event.pointerId !== undefined &&
+          builderMark.setPointerCapture
+        ) {
+          try {
+            builderMark.setPointerCapture(event.pointerId);
+          } catch {
+            // Pointer capture is optional.
+          }
+        }
+
+        legendHoldTimer = window.setTimeout(completeLegendHold, 5000);
+      }
+
+      function cancelLegendHold({ fidget = true } = {}) {
+        if (legendHoldTimer) {
+          window.clearTimeout(legendHoldTimer);
+          legendHoldTimer = 0;
+        }
+
+        builderMark.classList.remove("holding");
+        builderMark.setAttribute("aria-pressed", "false");
+
+        if (!legendHoldComplete && fidget) {
+          playBuilderFidget();
+        }
+
+        legendHoldComplete = false;
+      }
+
+      function triggerTitleGradient() {
+        titleEffect.classList.remove("chromatic");
+        void titleEffect.offsetWidth;
+        titleEffect.classList.add("chromatic");
+      }
+
+      function resetTitleGradient(event) {
+        if (event.animationName === "titleChroma") {
+          titleEffect.classList.remove("chromatic");
+        }
+      }
+
+      document.querySelectorAll(".platform-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          setPlatform(button.dataset.platform);
+        });
+      });
+
+      addProgramButton.addEventListener("click", addProgram);
+
+      programInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") addProgram();
+      });
+
+      generateButton.addEventListener("click", generate);
+      copyButton.addEventListener("click", copyWrapper);
+      $("reset").addEventListener("click", resetAll);
+
+      builderMark.addEventListener("pointerdown", startLegendHold);
+      builderMark.addEventListener("pointerup", () => cancelLegendHold());
+      builderMark.addEventListener("pointercancel", () => cancelLegendHold());
+      builderMark.addEventListener("lostpointercapture", () => {
+        if (legendHoldTimer) cancelLegendHold();
+      });
+
+      builderMark.addEventListener("keydown", (event) => {
+        if (
+          (event.key === " " || event.key === "Enter") &&
+          !event.repeat
+        ) {
+          event.preventDefault();
+          startLegendHold(event);
+        }
+      });
+
+      builderMark.addEventListener("keyup", (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          cancelLegendHold();
+        }
+      });
+
+      titleEffect.addEventListener("click", triggerTitleGradient);
+      titleEffect.addEventListener("animationend", resetTitleGradient);
+      exitClose.addEventListener("click", closeExitLegend);
+
+      exitPanel.addEventListener("click", (event) => {
+        if (event.target === exitPanel) closeExitLegend();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !exitPanel.hidden) {
+          closeExitLegend();
+        }
+      });
+
+      [
+        workspace,
+        project,
+        runSetup,
+        runSync,
+        buildEditor,
+        runEditor,
+        pauseFailure,
+        keepOpen,
+        remember
+      ].forEach((control) => {
+        control.addEventListener("input", () => {
+          updateProgressiveUI();
+          invalidatePreview();
+          persist();
+        });
+
+        control.addEventListener("change", () => {
+          updateProgressiveUI();
+          invalidatePreview();
+          persist();
+        });
+      });
+
+      loadPersisted();
+      renderPrograms();
+      updatePlatformUI();
+})();
+
+  </script>
+</body>
+</html>
