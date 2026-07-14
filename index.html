@@ -3,21 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Backpack 1.31.10</title>
+  <title>The Backpack 2.4</title>
   <link rel="stylesheet" href="./css/backpack.css" />
 </head>
 <body>
   <div class="bp-app">
     <header class="bp-header">
       <div class="bp-titleline">
-        <strong>BACKPACK V1.31.10</strong>
-        <span id="bpHeaderQuote">"Portable workspace: calendar, notes, snippets, templates, and state export"</span>
+        <strong>BACKPACK V2.4</strong>
+        <button id="bpHeaderQuoteBtn" class="bp-header-quote" type="button" title="Edit header quote" aria-label="Edit header quote" aria-expanded="false">
+          <span id="bpHeaderQuote">"Markdown notes and a visual card workspace"</span>
+          <span class="bp-header-quote-edit" aria-hidden="true">✎</span>
+        </button>
+        <div id="bpQuoteEditor" class="bp-quote-editor" aria-label="Header quote editor" hidden>
+          <label for="bpQuoteInput">Header quote</label>
+          <input id="bpQuoteInput" type="text" maxlength="180" autocomplete="off" />
+          <div class="bp-quote-editor-actions">
+            <button id="bpQuoteSaveBtn" type="button">Save quote</button>
+            <button id="bpQuoteCancelBtn" type="button">Cancel</button>
+            <button id="bpQuoteResetBtn" type="button">Reset</button>
+          </div>
+        </div>
         <div class="bp-actions" aria-label="Backpack actions">
+          <span id="bpSaveStatus" class="bp-save-status" data-state="saved" aria-live="polite">Saved</span>
           <div class="bp-action-dropdown">
             <button id="bpDataBtn" class="bp-action-wide" type="button" title="Open import/export menu" aria-label="Import and export" aria-expanded="false">Data ▾</button>
             <div id="bpDataMenu" class="bp-action-menu" aria-label="Import and export menu" hidden>
-              <button id="bpExportBtn" type="button" title="Export full Backpack state" aria-label="Export full Backpack state">Export state</button>
-              <button id="bpImportBtn" type="button" title="Import full Backpack state" aria-label="Import full Backpack state">Import state</button>
+              <button id="bpExportBtn" type="button" title="Export Notes and Drawing Board workspace" aria-label="Export Notes and Drawing Board workspace">Export workspace</button>
+              <button id="bpImportBtn" type="button" title="Import Notes and Drawing Board workspace" aria-label="Import Notes and Drawing Board workspace">Import workspace</button>
             </div>
           </div>
           <button id="bpThemeBtn" class="bp-action-wide" type="button" title="Cycle workspace theme" aria-label="Cycle workspace theme">Theme</button>
@@ -29,13 +42,11 @@
         <button id="bpDarkBtn" type="button" aria-pressed="false">App: Dark</button>
         <button id="bpReadBtn" type="button" aria-pressed="false">Reader: Light</button>
         <button id="bpDensityBtn" type="button" aria-pressed="false">Density: Compact</button>
-        <button id="bpAccessibleBtn" type="button" aria-pressed="false">Access: Standard</button>
       </div>
       <div class="bp-header-row">
         <nav id="bpTabs" class="bp-tabs" aria-label="Backpack sections"></nav>
       </div>
     </header>
-    <section id="bpPromotedShelf" class="bp-promoted-shelf" aria-live="polite"></section>
     <main id="bpWorkspace" class="bp-workspace"></main>
   </div>
 
