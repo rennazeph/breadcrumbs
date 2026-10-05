@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Backpack — Release 2.5</title>
+  <link rel="stylesheet" href="./css/backpack.css" />
+</head>
+<body>
+  <div class="bp-app">
+    <header class="bp-header">
+      <div class="bp-titleline">
+        <strong>BACKPACK RELEASE 2.5</strong>
+        <button id="bpHeaderQuoteBtn" class="bp-header-quote" type="button" title="Edit header quote" aria-label="Edit header quote" aria-expanded="false">
+          <span id="bpHeaderQuote">"Markdown notes and a visual card workspace"</span>
+          <span class="bp-header-quote-edit" aria-hidden="true">✎</span>
+        </button>
+        <div id="bpQuoteEditor" class="bp-quote-editor" aria-label="Header quote editor" hidden>
+          <label for="bpQuoteInput">Header quote</label>
+          <input id="bpQuoteInput" type="text" maxlength="180" autocomplete="off" />
+          <div class="bp-quote-editor-actions">
+            <button id="bpQuoteSaveBtn" type="button">Save quote</button>
+            <button id="bpQuoteCancelBtn" type="button">Cancel</button>
+            <button id="bpQuoteResetBtn" type="button">Reset</button>
+          </div>
+        </div>
+        <div class="bp-actions" aria-label="Backpack actions">
+          <span id="bpSaveStatus" class="bp-save-status" data-state="saved" aria-live="polite">Saved</span>
+          <div class="bp-action-dropdown">
+            <button id="bpDataBtn" class="bp-action-wide" type="button" title="Open import/export menu" aria-label="Import and export" aria-expanded="false">Data ▾</button>
+            <div id="bpDataMenu" class="bp-action-menu" aria-label="Import and export menu" hidden>
+              <button id="bpExportBtn" type="button" title="Export Notes and Drawing Board workspace" aria-label="Export Notes and Drawing Board workspace">Export workspace</button>
+              <button id="bpImportBtn" type="button" title="Import Notes and Drawing Board workspace" aria-label="Import Notes and Drawing Board workspace">Import workspace</button>
+            </div>
+          </div>
+          <div class="bp-action-dropdown bp-theme-dropdown">
+            <button id="bpThemeBtn" class="bp-action-wide" type="button" title="Open theme generator" aria-label="Open theme generator" aria-expanded="false">Theme ▾</button>
+            <div id="bpThemeMenu" class="bp-action-menu bp-theme-menu" aria-label="Theme generator" hidden>
+              <div class="bp-theme-menu-head">
+                <strong>Theme Generator</strong>
+                <div class="bp-theme-head-badges"><b id="bpThemeCurrentName" class="bp-theme-current">Applied · Gold</b><b id="bpThemeProfileBadge" class="bp-theme-profile-badge">Tactile</b></div>
+              </div>
+
+              <div class="bp-theme-preset-row">
+                <label for="bpThemePresetSelect"><span>Preset</span><select id="bpThemePresetSelect" aria-label="Theme preset starting point"><option value="goldenrod">◆ Goldenrod</option><option value="lime-analog">▰ Lime Analog</option><option value="grayscale">◫ Grayscale</option><option value="deep-red">▣ Deep Red</option><option value="terminal98">⌘ 98 Terminal</option><option value="custom" disabled>◈ Custom</option></select></label>
+                <b id="bpThemeDraftStatus" class="bp-theme-draft-status">Applied</b>
+              </div>
+
+              <div id="bpThemeViewport" class="bp-theme-viewport" aria-label="Live theme draft preview">
+                <div class="bp-theme-demo-chrome"><strong>BACKPACK</strong><button type="button" tabindex="-1">Action</button></div>
+                <div class="bp-theme-demo-tabs"><b>Notes</b><span>Drawing Board</span></div>
+                <div class="bp-theme-demo-body">
+                  <article>
+                    <h4>Reader preview</h4>
+                    <p>Surface text, <a href="#" tabindex="-1">link accent</a>, and <code>code</code>.</p>
+                  </article>
+                  <aside><button type="button" tabindex="-1">Button</button><i>Card</i></aside>
+                </div>
+              </div>
+
+              <div class="bp-theme-colors" aria-label="Theme source colours">
+                <label><span>Foundation</span><input id="bpThemeBase" type="color" value="#3F292B" aria-label="Theme foundation colour" /><b data-theme-preview="base">#3F292B</b></label>
+                <label><span>Surface</span><input id="bpThemeSurface" type="color" value="#DB7F67" aria-label="Theme surface colour" /><b data-theme-preview="surface">#DB7F67</b></label>
+                <label><span>Accent</span><input id="bpThemeAccent" type="color" value="#F0C45A" aria-label="Theme accent colour" /><b data-theme-preview="accent">#F0C45A</b></label>
+              </div>
+
+              <div class="bp-theme-options">
+                <label for="bpThemeFont"><span>Typeface</span><select id="bpThemeFont" aria-label="Theme typeface"><option value="ui">UI Sans</option><option value="mono">Mono</option><option value="book">Book Serif</option><option value="humanist">Humanist</option></select><b id="bpThemeFontHint">UI Sans</b></label>
+                <label for="bpThemeProfile"><span>Presentation</span><select id="bpThemeProfile" aria-label="Theme presentation profile"><option value="balanced">Balanced</option><option value="minimal">Minimal / Code</option><option value="tactile">Tactile</option><option value="hard">Hard Button</option><option value="cubist">Cubist</option></select><b id="bpThemeProfileHint">Tactile</b></label>
+              </div>
+
+              <div class="bp-theme-mode-switches" aria-label="Theme light and dark modes">
+                <button type="button" data-theme-app-mode="dark">App Dark</button>
+                <button type="button" data-theme-app-mode="light">App Light</button>
+                <button type="button" data-theme-reader-mode="light">Reader Light</button>
+                <button type="button" data-theme-reader-mode="dark">Reader Dark</button>
+              </div>
+
+              <div class="bp-theme-actions">
+                <button id="bpThemeRevertBtn" type="button" disabled>Revert draft</button>
+                <button id="bpThemeApplyBtn" type="button" disabled>Applied ✓</button>
+              </div>
+              <details class="bp-theme-portable">
+                <summary>Portable code</summary>
+                <div class="bp-theme-string-row"><input id="bpThemeStringInput" type="text" spellcheck="false" autocomplete="off" value="BPTH4|3F292B|DB7F67|F0C45A|ui|tactile|contrast" /><button id="bpThemeLoadBtn" type="button">Load draft</button><button id="bpThemeCopyBtn" type="button">Copy</button></div>
+              </details>
+            </div>
+          </div>
+          <button id="bpDisplayBtn" class="bp-action-wide" type="button" title="Toggle workspace density" aria-label="Toggle workspace density" aria-pressed="false">Density · Compact</button>
+          <input id="bpImportFile" class="bp-hidden" type="file" accept="application/json,.json" />
+        </div>
+      </div>
+      <div class="bp-header-row">
+        <nav id="bpTabs" class="bp-tabs" aria-label="Backpack sections"></nav>
+      </div>
+    </header>
+    <main id="bpWorkspace" class="bp-workspace"></main>
+    <div id="bpPersistentViewCache" class="bp-persist-view-cache" aria-hidden="true"></div>
+  </div>
+
+  <div id="bpToasts" class="bp-toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+  <script>window.MARKDOWN_TYPEWRITER_HOST_MODE = true; window.MARKDOWN_TYPEWRITER_AUTOSTART = false;</script>
+  <script src="./vendor/marked.js" defer></script>
+  <script src="./js/typewriter.js" defer></script>
+  <script src="./js/backpack.js" defer></script>
+</body>
+</html>
