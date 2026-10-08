@@ -1,0 +1,8 @@
+The Backpack
+Release: 2.5.1
+Compatibility appVersion: 2.45.0
+Workspace schema: 2
+Drawing Board geometryVersion: 3
+Drawing Board styleVersion: 13
+Portable theme format: BPTH5
+Markdown Typewriter: 2.9.0-draft.18
